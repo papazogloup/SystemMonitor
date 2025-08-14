@@ -4,6 +4,13 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <Version>1.1.0-alpha</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <Company>YourCompany</Company>
+    <Product>System Monitor</Product>
+    <Description>System monitoring tool with CPU, RAM, Network and Temperature monitoring</Description>
+    <Copyright>Copyright © 2024</Copyright>
     <AssemblyName>SystemMonitor</AssemblyName>
     <RootNamespace>SystemMonitor</RootNamespace>
     <Nullable>enable</Nullable>
