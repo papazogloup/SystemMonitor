@@ -25,7 +25,9 @@ namespace SystemMonitor
         private float currentCpuUsage = 0;
         private float currentRamUsage = 0;
         private float currentNetworkUsage = 0;
-        private Computer computer;
+        private Computer? computer;
+        private AlertSystem? alertSystem;
+        private MonitorSettings settings = new();
         private float currentCpuTemperature = 0; // Προσθήκη μεταβλητής για θερμοκρασία CPU
         private float currentCpuMaxTemperature = 0; // Προσθήκη στα private fields της κλάσης
 
@@ -53,10 +55,19 @@ namespace SystemMonitor
 
         public SystemTrayApp()
         {
-            InitializeComponent();
-            
             try 
             {
+                // Load settings first
+                settings = SettingsManager.LoadSettings();
+                if (!settings.Bars.Any())
+                {
+                    settings = new MonitorSettings(); // Use default settings if empty
+                    SettingsManager.SaveSettings(settings);
+                }
+
+                InitializeComponent();
+                
+                // Initialize monitoring components
                 Debug.WriteLine("Initializing monitoring...");
                 
                 // Initialize LibreHardwareMonitor
@@ -72,6 +83,9 @@ namespace SystemMonitor
                 };
                 computer.Open();
                 Debug.WriteLine("LibreHardwareMonitor initialized");
+                
+                // Initialize AlertSystem
+                alertSystem = new AlertSystem(settings);
                 
                 // Initialize CPU counter
                 cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
@@ -95,24 +109,14 @@ namespace SystemMonitor
                 
                 // Initial update
                 UpdateSystemInfo();
+                UpdateTrayIcon();
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Initialization error: {ex.Message}");
-                MessageBox.Show($"Error initializing monitoring: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
-                               "Initialization Error", 
-                               MessageBoxButtons.OK, 
-                               MessageBoxIcon.Error);
+                MessageBox.Show($"Error: {ex.Message}");
             }
         }
         
-        private void SystemTrayApp_Load(object? sender, EventArgs e)
-        {
-            Debug.WriteLine("SystemTrayApp_Load called!");
-            MessageBox.Show("Form Load Event Triggered!");  // Προσωρινό για testing
-            InitializeMonitoring();
-        }
-
         private void InitializeComponent()
         {
             // Hide the form
@@ -122,68 +126,46 @@ namespace SystemMonitor
 
             // Create tray menu
             trayMenu = new ContextMenuStrip();
-            trayMenu.Items.Add("CPU: 0%", null, null);
-            trayMenu.Items.Add("RAM: 0%", null, null);
-            trayMenu.Items.Add("NET: 0 KB/s", null, null);
-            trayMenu.Items.Add("-");
+            trayMenu.Items.Add("Options...", null, OnSettings);
+            trayMenu.Items.Add("About", null, OnAbout);
+            trayMenu.Items.Add("-"); // separator
             trayMenu.Items.Add("Exit", null, OnExit);
 
             // Create tray icon
-            trayIcon = new NotifyIcon()
+            trayIcon = new NotifyIcon
             {
-                Text = "System Monitor",
                 Icon = CreateTrayIcon(0, 0, 0),
                 ContextMenuStrip = trayMenu,
                 Visible = true
             };
 
-            trayIcon.DoubleClick += TrayIcon_DoubleClick;
+            // Remove any existing click handlers and add the correct one
+            trayIcon.MouseClick += (s, e) => 
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    ShowSettings();
+                }
+            };
         }
 
-        private void InitializeMonitoring()
+        private void ShowSettings()
         {
-            try
+            // If settings form is already open, bring it to front
+            if (Application.OpenForms.OfType<SettingsForm>().Any())
             {
-                Debug.WriteLine("Initializing monitoring...");
-                
-                // Windows 11 τρόπος δημιουργίας του counter
-                cpuCounter = new PerformanceCounter()
-                {
-                    CategoryName = "Processor Information",
-                    CounterName = "% Processor Time",
-                    InstanceName = "_Total",
-                    ReadOnly = false
-                };
-                
-                Debug.WriteLine("CPU Counter created");
-                
-                // Αρχική μέτρηση (θα επιστρέψει 0)
-                float firstReading = cpuCounter.NextValue();
-                Debug.WriteLine($"First CPU reading: {firstReading}");
-                
-                // Περιμένουμε 1 δευτερόλεπτο για την πρώτη πραγματική μέτρηση
-                Thread.Sleep(1000);
-                float secondReading = cpuCounter.NextValue();
-                Debug.WriteLine($"Second CPU reading: {secondReading}");
-                
-                networkInterfaces = NetworkInterface.GetAllNetworkInterfaces();
-                Debug.WriteLine($"Found {networkInterfaces.Length} network interfaces");
-                
-                timer = new System.Windows.Forms.Timer();
-                timer.Interval = 1000;
-                timer.Tick += Timer_Tick;
-                timer.Start();
-                Debug.WriteLine("Timer started");
+                var form = Application.OpenForms.OfType<SettingsForm>().First();
+                form.WindowState = FormWindowState.Normal;
+                form.BringToFront();
+                return;
             }
-            catch (Exception ex)
+
+            // Otherwise create and show new settings form
+            var settingsForm = new SettingsForm(settings)
             {
-                Debug.WriteLine($"ERROR in InitializeMonitoring: {ex.Message}");
-                MessageBox.Show($"Error initializing monitoring: {ex.Message}\n\n" +
-                               $"Please run as administrator and try again.", 
-                               "Initialization Error", 
-                               MessageBoxButtons.OK, 
-                               MessageBoxIcon.Error);
-            }
+                Owner = this
+            };
+            settingsForm.Show();
         }
 
         private void Timer_Tick(object? sender, EventArgs e)
@@ -220,9 +202,31 @@ namespace SystemMonitor
                 currentCpuTemperature = GetCpuTemperature();
                 Debug.WriteLine($"CPU Temp: {currentCpuTemperature:F1}°C");
 
-                // Ενημέρωση UI
-                UpdateTrayIcon();
-                UpdateTrayMenu();
+                // Update tray icon and tooltip
+                if (trayIcon != null)
+                {
+                    string networkText = currentNetworkUsage >= 1024 
+                        ? $"{currentNetworkUsage / 1024:F1} MB/s"
+                        : $"{currentNetworkUsage:F0} KB/s";
+
+                    string tooltip = String.Format(
+                        "      System Monitor      \n" +  // Centered title
+                        "━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                        "CPU Usage:  {0,6:F1}%\n" +
+                        "Memory:     {1,6:F1}%\n" +
+                        "Network:    {2,7}\n" +
+                        "CPU Temp:   {3,6:F1}°\n" +
+                        "CPU Max:    {4,6:F1}°",
+                        currentCpuUsage,
+                        currentRamUsage,
+                        networkText,
+                        currentCpuTemperature,
+                        currentCpuMaxTemperature
+                    );
+
+                    trayIcon.Text = tooltip;
+                    UpdateTrayIcon();
+                }
             }
             catch (Exception ex)
             {
@@ -232,19 +236,18 @@ namespace SystemMonitor
 
         private void UpdateTrayIcon()
         {
-            if (trayIcon != null)
+            if (trayIcon == null) return;
+
+            try
             {
-                // Create new icon with current usage levels
-                var newIcon = CreateTrayIcon(currentCpuUsage, currentRamUsage, currentNetworkUsage);
-                trayIcon.Icon?.Dispose();
-                trayIcon.Icon = newIcon;
-                
-                // Update tooltip
-                string networkText = currentNetworkUsage >= 1024 ? 
-                    $"{currentNetworkUsage / 1024:F1} MB/s" : 
-                    $"{currentNetworkUsage:F0} KB/s";
-                    
-                trayIcon.Text = $"CPU: {currentCpuUsage:F1}%\nRAM: {currentRamUsage:F1}%\nNET: {networkText}";
+                using var newIcon = CreateTrayIcon(currentCpuUsage, currentRamUsage, currentNetworkUsage);
+                var oldIcon = trayIcon.Icon;
+                trayIcon.Icon = (Icon)newIcon.Clone();
+                oldIcon?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error updating tray icon: {ex.Message}");
             }
         }
 
@@ -273,55 +276,83 @@ namespace SystemMonitor
             }
         }
 
+        private void OnSettings(object? sender, EventArgs e)
+        {
+            ShowSettings();
+        }
+        
+        private void OnAbout(object? sender, EventArgs e)
+        {
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            MessageBox.Show(
+                $"System Monitor\n\n" +
+                $"Version {version?.ToString() ?? "unknown"}\n\n" +
+                "Copyleft: papazogloup",
+                "About System Monitor",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            );
+        }
+
         private Icon CreateTrayIcon(float cpuUsage, float ramUsage, float networkUsage)
         {
-            using (var bitmap = new Bitmap(16, 16))
-            using (var g = Graphics.FromImage(bitmap))
+            using var bitmap = new Bitmap(16, 16);
+            using var g = Graphics.FromImage(bitmap);
+            
+            g.Clear(Color.Black);
+            
+            var values = new Dictionary<BarType, float>
             {
-                // Μαύρο background
-                g.Clear(Color.Black);
+                { BarType.CPU, cpuUsage },
+                { BarType.RAM, ramUsage },
+                { BarType.Network, networkUsage },
+                { BarType.CPUTemp, currentCpuTemperature },
+                { BarType.CPUMaxTemp, currentCpuMaxTemperature }
+            };
+            
+            var visibleBars = settings.Bars
+                .Where(b => b.IsVisible)
+                .ToList();
 
-                // CPU μπάρα (Έντονο μπλε) - 3 pixels
-                int cpuHeight = Math.Max(1, (int)(16 * (cpuUsage / 100.0f)));
-                using (var brush = new SolidBrush(Color.FromArgb(0, 120, 255)))
+            int totalBars = visibleBars.Count;
+            int baseWidth = 16 / totalBars;
+            int extraPixels = 16 % totalBars;
+            int currentPos = 0;
+
+            for (int i = 0; i < totalBars; i++)
+            {
+                var bar = visibleBars[i];
+                float value = values[bar.Type];
+                float scale = bar.Type == BarType.Network ?
+                    Math.Min(value / 10240, 1.0f) :
+                    Math.Min(value / 100.0f, 1.0f);
+
+                int barSize = baseWidth + (i < extraPixels ? 1 : 0);
+                int barLength = Math.Max(1, (int)(16 * scale));
+
+                if (settings.IsHorizontalLayout)
                 {
-                    g.FillRectangle(brush, 0, 16 - cpuHeight, 3, cpuHeight);
+                    // Horizontal bars - grow from left to right
+                    g.FillRectangle(new SolidBrush(bar.Color),
+                        0,                  // Start from left
+                        currentPos,         // Y position
+                        barLength,          // Width based on value
+                        barSize);          // Fixed height
+                }
+                else
+                {
+                    // Vertical bars - grow from bottom to top
+                    g.FillRectangle(new SolidBrush(bar.Color),
+                        currentPos,         // X position
+                        16 - barLength,     // Start from bottom
+                        barSize,           // Fixed width
+                        barLength);        // Height based on value
                 }
 
-                // RAM μπάρα (Έντονο πράσινο) - 3 pixels
-                int ramHeight = Math.Max(1, (int)(16 * (ramUsage / 100.0f)));
-                using (var brush = new SolidBrush(Color.FromArgb(0, 255, 0)))
-                {
-                    g.FillRectangle(brush, 3, 16 - ramHeight, 3, ramHeight);
-                }
-
-                // Network μπάρα (Μπορντό) - 3 pixels
-                float networkScale = Math.Min(networkUsage / (10 * 1024), 1.0f);
-                int networkHeight = Math.Max(1, (int)(16 * networkScale));
-                using (var brush = new SolidBrush(Color.FromArgb(220, 20, 60)))
-                {
-                    g.FillRectangle(brush, 6, 16 - networkHeight, 3, networkHeight);
-                }
-
-                // CPU Average Temperature μπάρα (Κίτρινο) - 3 pixels
-                float tempScale = Math.Min(currentCpuTemperature / 100.0f, 1.0f);
-                int tempHeight = Math.Max(1, (int)(16 * tempScale));
-                using (var brush = new SolidBrush(Color.FromArgb(255, 255, 0)))
-                {
-                    g.FillRectangle(brush, 9, 16 - tempHeight, 3, tempHeight);
-                }
-
-                // CPU Max Temperature μπάρα (Πορτοκαλί) - 4 pixels
-                float maxTempScale = Math.Min(currentCpuMaxTemperature / 100.0f, 1.0f);
-                int maxTempHeight = Math.Max(1, (int)(16 * maxTempScale));
-                using (var brush = new SolidBrush(Color.FromArgb(255, 140, 0))) // Πορτοκαλί
-                {
-                    g.FillRectangle(brush, 12, 16 - maxTempHeight, 4, maxTempHeight);
-                }
-
-                IntPtr hIcon = bitmap.GetHicon();
-                return Icon.FromHandle(hIcon);
+                currentPos += barSize;
             }
+
+            return Icon.FromHandle(bitmap.GetHicon());
         }
 
         private float GetNetworkUsage()
@@ -492,6 +523,12 @@ namespace SystemMonitor
             float avgTemp = count > 0 ? sum / count : 0;
             Debug.WriteLine($"Manually calculated average: {avgTemp:F1}°C");
             return avgTemp;
+        }
+
+        public void UpdateSettings(MonitorSettings newSettings)
+        {
+            settings = newSettings;
+            UpdateTrayIcon();
         }
     }
 

@@ -55,3 +55,4 @@ C:\Users\papazogloup\MYPROJECTS\SystemMonitor\obj\Debug\net9.0-windows\refint\Sy
 C:\Users\papazogloup\MYPROJECTS\SystemMonitor\obj\Debug\net9.0-windows\SystemMonitor.pdb
 C:\Users\papazogloup\MYPROJECTS\SystemMonitor\obj\Debug\net9.0-windows\SystemMonitor.genruntimeconfig.cache
 C:\Users\papazogloup\MYPROJECTS\SystemMonitor\obj\Debug\net9.0-windows\ref\SystemMonitor.dll
+C:\Users\papazogloup\MYPROJECTS\SystemMonitor\obj\Debug\net9.0-windows\SystemMonitor.sourcelink.json

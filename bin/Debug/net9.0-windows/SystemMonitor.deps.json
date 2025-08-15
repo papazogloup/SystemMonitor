@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v9.0": {
-      "SystemMonitor/1.0.0": {
+      "SystemMonitor/1.1.0-alpha": {
         "dependencies": {
           "LibreHardwareMonitorLib": "0.9.4",
           "System.Management": "9.0.0"
@@ -373,7 +373,7 @@
     }
   },
   "libraries": {
-    "SystemMonitor/1.0.0": {
+    "SystemMonitor/1.1.0-alpha": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
