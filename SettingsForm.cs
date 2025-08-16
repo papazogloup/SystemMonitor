@@ -142,15 +142,20 @@ namespace SystemMonitor
             {
                 Location = new Point(12, 35),
                 Size = new Size(576, 203),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom, // Πρόσθεσε Bottom
                 AllowDrop = true,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, // Άλλαξε σε Fill
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 EnableHeadersVisualStyles = false,
                 ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
                 {
                     BackColor = SystemColors.Control,
                     Alignment = DataGridViewContentAlignment.MiddleCenter
+                },
+                DefaultCellStyle = new DataGridViewCellStyle // Πρόσθεσε default style
+                {
+                    SelectionBackColor = SystemColors.Control, // Αφαίρεσε το μπλε highlight
+                    SelectionForeColor = SystemColors.ControlText
                 },
                 RowTemplate = { Height = 25 },
                 BackgroundColor = SystemColors.Window,
@@ -384,6 +389,28 @@ namespace SystemMonitor
             dataGridBars.CellValueChanged += (s, e) => {
                 hasChanges = true;
                 btnApply.Enabled = true;
+            };
+
+            // Πρόσθεσε το click handler για το color picker:
+            dataGridBars.CellClick += (s, e) => {
+                if (dataGridBars == null || e.RowIndex < 0) return;
+
+                if (e.ColumnIndex == dataGridBars.Columns["Color"].Index)
+                {
+                    var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                    if (cell.Tag is Color currentColor)
+                    {
+                        colorDialog.Color = currentColor;
+                        if (colorDialog.ShowDialog() == DialogResult.OK)
+                        {
+                            tempBars[e.RowIndex].Color = colorDialog.Color;
+                            cell.Tag = colorDialog.Color;
+                            dataGridBars.InvalidateCell(cell);
+                            hasChanges = true;
+                            btnApply.Enabled = true;
+                        }
+                    }
+                }
             };
 
             // Add controls to form
