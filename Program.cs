@@ -53,6 +53,9 @@ namespace SystemMonitor
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
+        private Dictionary<BarType, System.Windows.Forms.Timer> blinkTimers = new();
+        private Dictionary<BarType, bool> blinkStates = new();
+
         public SystemTrayApp()
         {
             try 
@@ -86,6 +89,7 @@ namespace SystemMonitor
                 
                 // Initialize AlertSystem
                 alertSystem = new AlertSystem(settings);
+                alertSystem.OnAlert += HandleAlert;
                 
                 // Initialize CPU counter
                 cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
@@ -182,26 +186,25 @@ namespace SystemMonitor
                 if (cpuCounter != null)
                 {
                     currentCpuUsage = cpuCounter.NextValue();
-                    Debug.WriteLine($"CPU: {currentCpuUsage:F1}%");
+                    // Debug.WriteLine($"CPU: {currentCpuUsage:F1}%");  // Comment this
                 }
                 
                 // Update RAM
                 var memStatus = new MEMORYSTATUSEX();
-                memStatus.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
                 if (GlobalMemoryStatusEx(memStatus))
                 {
                     currentRamUsage = memStatus.dwMemoryLoad;
-                    Debug.WriteLine($"RAM: {currentRamUsage:F1}%");
+                    // Debug.WriteLine($"RAM: {currentRamUsage:F1}%");  // Comment this
                 }
                 
                 // Update Network
                 currentNetworkUsage = GetNetworkUsage();
-                Debug.WriteLine($"Network: {currentNetworkUsage:F1} KB/s");
+                // Debug.WriteLine($"Network: {currentNetworkUsage:F1} KB/s");  // Comment this
 
                 // Update CPU Temperature
                 currentCpuTemperature = GetCpuTemperature();
-                Debug.WriteLine($"CPU Temp: {currentCpuTemperature:F1}°C");
-
+                // Debug.WriteLine($"CPU Temp: {currentCpuTemperature:F1}°C");  // Comment this
+                
                 // Check thresholds and trigger alerts
                 if (alertSystem != null)
                 {
@@ -292,7 +295,7 @@ namespace SystemMonitor
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error in UpdateSystemInfo: {ex.Message}");
+                // Debug.WriteLine($"Error in UpdateSystemInfo: {ex.Message}");  // Comment this
             }
         }
 
@@ -483,6 +486,20 @@ namespace SystemMonitor
                     }
                 }
 
+                // Add blinking white border if needed
+                if (blinkStates.TryGetValue(bar.Type, out bool isBlinking) && isBlinking)
+                {
+                    using var whitePen = new Pen(Color.White, 1);
+                    if (settings.IsHorizontalLayout)
+                    {
+                        g.DrawRectangle(whitePen, 0, currentPos, barLength, barSize);
+                    }
+                    else
+                    {
+                        g.DrawRectangle(whitePen, currentPos, 16 - barLength, barSize, barLength);
+                    }
+                }
+
                 currentPos += barSize;
             }
 
@@ -633,21 +650,24 @@ namespace SystemMonitor
             float sum = 0;
             int count = 0;
 
-            foreach (var hardware in computer.Hardware)
+            if (computer?.Hardware != null)
             {
-                if (hardware.HardwareType == HardwareType.Cpu)
+                foreach (var hardware in computer.Hardware)
                 {
-                    foreach (var sensor in hardware.Sensors)
+                    if (hardware.HardwareType == HardwareType.Cpu)
                     {
-                        if (sensor.SensorType == SensorType.Temperature &&
-                            sensor.Name.StartsWith("CPU Core #", StringComparison.OrdinalIgnoreCase) &&
-                            !sensor.Name.Contains("Distance", StringComparison.OrdinalIgnoreCase))
+                        foreach (var sensor in hardware.Sensors)
                         {
-                            if (sensor.Value.HasValue)
+                            if (sensor.SensorType == SensorType.Temperature &&
+                                sensor.Name.StartsWith("CPU Core #", StringComparison.OrdinalIgnoreCase) &&
+                                !sensor.Name.Contains("Distance", StringComparison.OrdinalIgnoreCase))
                             {
-                                Debug.WriteLine($"{sensor.Name}: {sensor.Value.Value}°C");
-                                sum += sensor.Value.Value;
-                                count++;
+                                if (sensor.Value.HasValue)
+                                {
+                                    Debug.WriteLine($"{sensor.Name}: {sensor.Value.Value}°C");
+                                    sum += sensor.Value.Value;
+                                    count++;
+                                }
                             }
                         }
                     }
@@ -663,6 +683,41 @@ namespace SystemMonitor
         {
             settings = newSettings;
             UpdateTrayIcon();
+        }
+
+        private void HandleAlert(BarType type)
+        {
+            if (blinkTimers.ContainsKey(type))
+            {
+                blinkTimers[type].Stop();
+                blinkTimers[type].Dispose();
+            }
+
+            var blinkTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 500 // Blink every 500ms
+            };
+
+            blinkStates[type] = true;
+            var startTime = DateTime.Now;
+
+            blinkTimer.Tick += (s, e) =>
+            {
+                blinkStates[type] = !blinkStates[type];
+                UpdateTrayIcon();
+
+                if ((DateTime.Now - startTime).TotalSeconds >= 5)
+                {
+                    blinkTimer.Stop();
+                    blinkTimer.Dispose();
+                    blinkStates.Remove(type);
+                    blinkTimers.Remove(type);
+                    UpdateTrayIcon();
+                }
+            };
+
+            blinkTimers[type] = blinkTimer;
+            blinkTimer.Start();
         }
     }
 

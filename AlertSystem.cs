@@ -1,4 +1,4 @@
-using System.Media; // Add this for SystemSounds
+using System.Media;
 
 namespace SystemMonitor
 {
@@ -8,12 +8,26 @@ namespace SystemMonitor
         public int SnoozeMinutes { get; set; } = 5;
         public bool SoundEnabled { get; set; } = true;
         public Dictionary<BarType, DateTime> SnoozeUntil { get; set; } = new();
+
+        public AlertSettings Clone()
+        {
+            return new AlertSettings
+            {
+                IsEnabled = this.IsEnabled,
+                SnoozeMinutes = this.SnoozeMinutes,
+                SoundEnabled = this.SoundEnabled,
+                SnoozeUntil = new Dictionary<BarType, DateTime>(this.SnoozeUntil)
+            };
+        }
     }
 
     public class AlertSystem
     {
         private readonly MonitorSettings settings;
         private Dictionary<BarType, DateTime> lastAlerts = new();
+        
+        // Add event for blinking
+        public event Action<BarType>? OnAlert;
 
         public AlertSystem(MonitorSettings settings)
         {
@@ -28,14 +42,23 @@ namespace SystemMonitor
             // Check if we're still in snooze period
             if (settings.AlertSettings.SnoozeUntil.TryGetValue(type, out DateTime snoozeTime))
             {
-                if (DateTime.Now < snoozeTime) return;
+                if (DateTime.Now < snoozeTime)
+                {
+                    // Still in snooze period, just trigger blink without sound
+                    OnAlert?.Invoke(type);
+                    return;
+                }
+                else
+                {
+                    // Snooze period expired, remove it
+                    settings.AlertSettings.SnoozeUntil.Remove(type);
+                }
             }
 
-            // Check if enough time has passed since last alert (prevent spam)
+            // Check for alert throttling (5 seconds between alerts)
             if (lastAlerts.TryGetValue(type, out DateTime lastAlert))
             {
-                var timeSinceLastAlert = DateTime.Now - lastAlert;
-                if (timeSinceLastAlert.TotalSeconds < 5) return; // Minimum 5 seconds between alerts
+                if ((DateTime.Now - lastAlert).TotalSeconds < 5) return;
             }
 
             // Update last alert time
@@ -47,19 +70,31 @@ namespace SystemMonitor
                 Icon = SystemIcons.Warning,
                 Visible = true
             };
-            notification.ShowBalloonTip(5000, "System Monitor Alert", message, ToolTipIcon.Warning);
+
+            var snoozeInfo = settings.AlertSettings.SnoozeUntil.TryGetValue(type, out DateTime until)
+                ? $" (Snoozed until {until:HH:mm})"
+                : "";
+
+            notification.ShowBalloonTip(5000, "System Monitor Alert",
+                message + snoozeInfo, ToolTipIcon.Warning);
 
             // Play sound if enabled
             if (settings.AlertSettings.SoundEnabled)
             {
-                Console.Beep(800, 200); // Frequency: 800Hz, Duration: 200ms
+                SystemSounds.Exclamation.Play();
             }
+
+            // Trigger blinking
+            OnAlert?.Invoke(type);
         }
 
         public void Snooze(BarType type)
         {
             var snoozeTime = DateTime.Now.AddMinutes(settings.AlertSettings.SnoozeMinutes);
             settings.AlertSettings.SnoozeUntil[type] = snoozeTime;
+
+            // Clear any existing alerts for this type
+            lastAlerts.Remove(type);
         }
     }
 }
