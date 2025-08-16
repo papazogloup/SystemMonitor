@@ -14,7 +14,14 @@ namespace SystemMonitor
         private CheckBox? chkSound;
         private Button? btnOK;
         private Button? btnCancel;
-        
+        private Button? btnApply;  // Add this field at the top of the class
+
+        // Add linesPanel as a class field
+        private GroupBox? linesPanel;
+        private CheckBox? chkGuideLines;
+        private CheckBox? chkThresholdLines;
+        private CheckBox? chkPeakLines;
+
         public SettingsForm(MonitorSettings currentSettings)
         {
             settings = currentSettings;
@@ -26,8 +33,8 @@ namespace SystemMonitor
         {
             // Form settings
             this.Text = "System Monitor Settings";
-            this.ClientSize = new Size(600, 400);
-            this.MinimumSize = new Size(500, 350);
+            this.ClientSize = new Size(600, 460);
+            this.MinimumSize = new Size(500, 460);
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.StartPosition = FormStartPosition.CenterScreen;
             
@@ -40,24 +47,24 @@ namespace SystemMonitor
                 AutoSize = true
             };
             
-            // Bars grid
+            // Grid settings
             dataGridBars = new DataGridView
             {
                 Location = new Point(12, 40),
-                Size = new Size(560, 200),  // Reduced width from 760 to 560
+                Size = new Size(560, 200),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                AllowUserToResizeRows = false,
                 RowHeadersVisible = false,
                 BackgroundColor = SystemColors.Window,
-                AllowDrop = true,
-                GridColor = SystemColors.Control,  // Make grid lines less visible
+                GridColor = SystemColors.Control,
+                BorderStyle = BorderStyle.None,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
-                    SelectionBackColor = SystemColors.Control,  // Light gray instead of blue
-                    SelectionForeColor = SystemColors.ControlText  // Regular text color
+                    SelectionBackColor = SystemColors.Control,
+                    SelectionForeColor = SystemColors.ControlText
                 }
             };
 
@@ -119,18 +126,19 @@ namespace SystemMonitor
             // Center align all column headers
             dataGridBars.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
 
-            // Alert settings panel - adjusted width
-            var alertsPanel = new Panel
+            // Alert settings panel - move it before lines panel
+            var alertPanel = new GroupBox
             {
-                Location = new Point(12, 250),
-                Size = new Size(560, 80),   // Reduced width from 760 to 560
+                Text = "Alert Settings",
+                Location = new Point(12, 250),  // Adjusted location
+                Size = new Size(560, 70),
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
 
             chkAlerts = new CheckBox 
             { 
                 Text = "Enable Alerts",
-                Location = new Point(0, 0),
+                Location = new Point(20, 30),
                 AutoSize = true,
                 Checked = settings.AlertSettings.IsEnabled
             };
@@ -138,9 +146,8 @@ namespace SystemMonitor
             var lblSnooze = new Label
             {
                 Text = "Snooze Minutes:",
-                Location = new Point(0, 30),
-                Size = new Size(90, 20),
-                TextAlign = ContentAlignment.MiddleLeft
+                Location = new Point(200, 32),
+                AutoSize = true
             };
 
             numSnooze = new NumericUpDown 
@@ -148,27 +155,64 @@ namespace SystemMonitor
                 Minimum = 1,
                 Maximum = 60,
                 Value = settings.AlertSettings.SnoozeMinutes,
-                Location = new Point(95, 30),
+                Location = new Point(290, 30),
                 Size = new Size(60, 20)
             };
-            
+
             chkSound = new CheckBox 
             { 
                 Text = "Enable Sound",
-                Location = new Point(200, 30),
+                Location = new Point(380, 30),
                 AutoSize = true,
                 Checked = settings.AlertSettings.SoundEnabled
             };
 
-            alertsPanel.Controls.AddRange(new Control[] { 
+            alertPanel.Controls.AddRange(new Control[] { 
                 chkAlerts, lblSnooze, numSnooze, chkSound 
             });
-            
-            // Buttons panel with Reset, Apply, OK, Cancel
+
+            // Lines panel - store reference as class field
+            linesPanel = new GroupBox
+            {
+                Text = "Display Options",
+                Location = new Point(12, 330),
+                Size = new Size(560, 70),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+
+            chkGuideLines = new CheckBox
+            {
+                Text = "Show Guide Lines",
+                Location = new Point(20, 25),
+                AutoSize = true,
+                Checked = settings.ShowGuideLines
+            };
+
+            chkThresholdLines = new CheckBox
+            {
+                Text = "Show Threshold Lines",
+                Location = new Point(200, 25),
+                AutoSize = true,
+                Checked = settings.ShowThresholdLines
+            };
+
+            chkPeakLines = new CheckBox
+            {
+                Text = "Show Peak Lines",
+                Location = new Point(380, 25),
+                AutoSize = true,
+                Checked = settings.ShowPeakLines
+            };
+
+            linesPanel.Controls.AddRange(new Control[] { 
+                chkGuideLines, chkThresholdLines, chkPeakLines 
+            });
+
+            // Button panel - move to bottom
             var buttonPanel = new Panel
             {
-                Location = new Point(12, 340),
-                Size = new Size(560, 40),    // Increased height from 35 to 40
+                Location = new Point(12, 410),  // Adjusted location
+                Size = new Size(560, 40),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
 
@@ -176,12 +220,11 @@ namespace SystemMonitor
             {
                 Text = "Reset to Default",
                 AutoSize = true,
-                MinimumSize = new Size(120, 28),  // Increased height from 25 to 28
+                MinimumSize = new Size(120, 28),
                 MaximumSize = new Size(200, 28),
-                Location = new Point(5, 6),        // Centered vertically (40-28)/2 = 6
+                Location = new Point(5, 6),
                 Anchor = AnchorStyles.Left,
-                TextAlign = ContentAlignment.MiddleCenter,
-                AutoEllipsis = false
+                TextAlign = ContentAlignment.MiddleCenter
             };
             btnReset.Click += (s, e) => ResetToDefaults();
 
@@ -189,8 +232,8 @@ namespace SystemMonitor
             { 
                 Text = "OK",
                 DialogResult = DialogResult.OK,
-                Size = new Size(75, 28),          // Increased height to 28
-                Location = new Point(320, 6),      // Centered vertically
+                Size = new Size(75, 28),
+                Location = new Point(320, 6),
                 Anchor = AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleCenter
             };
@@ -200,48 +243,83 @@ namespace SystemMonitor
                     this.Close();
                 }
             };
-            
-            var btnApply = new Button
+
+            btnApply = new Button  // Store reference to btnApply
             {
                 Text = "Apply",
-                Size = new Size(75, 28),          // Increased height to 28
-                Location = new Point(400, 6),      // Centered vertically
+                Size = new Size(75, 28),
+                Location = new Point(400, 6),
                 Anchor = AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Enabled = false // Initially disabled until changes are made
+                Enabled = false
             };
             btnApply.Click += (s, e) => ApplySettings();
-            
+
             btnCancel = new Button 
             { 
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Size = new Size(75, 28),          // Increased height to 28
-                Location = new Point(480, 6),      // Centered vertically
+                Size = new Size(75, 28),
+                Location = new Point(480, 6),
                 Anchor = AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleCenter
             };
             btnCancel.Click += (s, e) => this.Close();
 
-            buttonPanel.Controls.AddRange(new Control[] { btnReset, btnOK, btnApply, btnCancel });
-            
-            // Add all controls
+            // Change handlers for line options
+            chkGuideLines.CheckedChanged += (s, e) => { 
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            chkThresholdLines.CheckedChanged += (s, e) => {
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            chkPeakLines.CheckedChanged += (s, e) => {
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            // Add change handlers for other controls
+            chkHorizontal.CheckedChanged += (s, e) => {
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            chkAlerts.CheckedChanged += (s, e) => {
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            numSnooze.ValueChanged += (s, e) => {
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            chkSound.CheckedChanged += (s, e) => {
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            dataGridBars.CellValueChanged += (s, e) => {
+                hasChanges = true;
+                btnApply.Enabled = true;
+            };
+
+            // Add controls to form
             this.Controls.AddRange(new Control[] {
                 chkHorizontal,
                 dataGridBars,
-                alertsPanel,
+                alertPanel,
+                linesPanel,
                 buttonPanel
             });
 
-            // Add CellClick handler
-            dataGridBars.CellClick += DataGridBars_CellClick;
-
-            // Add handlers for change tracking
-            dataGridBars.CellValueChanged += (s, e) => { hasChanges = true; btnApply.Enabled = true; };
-            chkHorizontal.CheckedChanged += (s, e) => { hasChanges = true; btnApply.Enabled = true; };
-            chkAlerts.CheckedChanged += (s, e) => { hasChanges = true; btnApply.Enabled = true; };
-            numSnooze.ValueChanged += (s, e) => { hasChanges = true; btnApply.Enabled = true; };
-            chkSound.CheckedChanged += (s, e) => { hasChanges = true; btnApply.Enabled = true; };
+            buttonPanel.Controls.AddRange(new Control[] { 
+                btnReset, btnOK, btnApply, btnCancel 
+            });
         }
 
         private Bitmap CreateDragHandleIcon()
@@ -266,10 +344,14 @@ namespace SystemMonitor
             if (dataGridBars == null) return;
 
             var hitTest = dataGridBars.HitTest(e.X, e.Y);
-            // Only allow drag from the drag handle column
             if (hitTest.ColumnIndex == 0 && hitTest.RowIndex >= 0)
             {
                 dragRowIndex = hitTest.RowIndex;
+                dataGridBars.Rows[dragRowIndex].Selected = true;
+            }
+            else
+            {
+                dragRowIndex = -1;
             }
         }
 
@@ -303,13 +385,20 @@ namespace SystemMonitor
             if (targetRowIndex < 0 || dragRowIndex < 0 || targetRowIndex == dragRowIndex)
                 return;
 
-            // Move the bar in the settings
-            var bar = settings.Bars[dragRowIndex];
+            // Get the row being dragged
+            var rowData = settings.Bars[dragRowIndex];
+            
+            // Remove from old position and insert at new position
             settings.Bars.RemoveAt(dragRowIndex);
-            settings.Bars.Insert(targetRowIndex, bar);
+            settings.Bars.Insert(targetRowIndex, rowData);
 
-            // Reload the grid
+            // Refresh grid and mark changes
             LoadSettings();
+            hasChanges = true;
+            if (btnApply != null)
+            {
+                btnApply.Enabled = true;
+            }
 
             // Select the moved row
             dataGridBars.Rows[targetRowIndex].Selected = true;
@@ -411,10 +500,50 @@ namespace SystemMonitor
             {
                 if (Owner is SystemTrayApp app)
                 {
-                    var newSettings = GetSettings();
-                    app.UpdateSettings(newSettings);
-                    SettingsManager.SaveSettings(newSettings);
+                    // Get current values from controls
+                    settings.IsHorizontalLayout = chkHorizontal?.Checked ?? false;
+                    settings.AlertSettings.IsEnabled = chkAlerts?.Checked ?? true;
+                    settings.AlertSettings.SnoozeMinutes = (int)(numSnooze?.Value ?? 5);
+                    settings.AlertSettings.SoundEnabled = chkSound?.Checked ?? true;
+                    
+                    // Get display options values
+                    settings.ShowGuideLines = chkGuideLines?.Checked ?? true;
+                    settings.ShowThresholdLines = chkThresholdLines?.Checked ?? true;
+                    settings.ShowPeakLines = chkPeakLines?.Checked ?? true;
+                    
+                    // Update bars from grid
+                    if (dataGridBars != null)
+                    {
+                        var newBars = new List<BarSettings>();
+                        for (int i = 0; i < dataGridBars.Rows.Count; i++)
+                        {
+                            var row = dataGridBars.Rows[i];
+                            var type = row.Cells["Type"].Value?.ToString();
+                            if (type == null) continue;
+                            
+                            var bar = settings.Bars.First(b => b.Type.ToString() == type);
+                            if (row.Cells["Visible"].Value is bool visible)
+                                bar.IsVisible = visible;
+                            if (row.Cells["Threshold"].Value != null)
+                                bar.Threshold = Convert.ToSingle(row.Cells["Threshold"].Value);
+                            if (row.Cells["Color"].Tag is Color color)
+                                bar.Color = color;
+                            newBars.Add(bar);
+                        }
+                        settings.Bars = newBars;
+                    }
+
+                    // Apply changes
+                    app.UpdateSettings(settings);
+                    SettingsManager.SaveSettings(settings);
+                    
+                    // Reset change tracking
                     hasChanges = false;
+                    if (btnApply != null)
+                    {
+                        btnApply.Enabled = false;
+                    }
+                    
                     return true;
                 }
                 return false;

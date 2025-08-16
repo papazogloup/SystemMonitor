@@ -14,6 +14,9 @@ namespace SystemMonitor
     public class MonitorSettings
     {
         public bool IsHorizontalLayout { get; set; }
+        public bool ShowGuideLines { get; set; } = true;      // For gray lines
+        public bool ShowThresholdLines { get; set; } = true;  // For red lines
+        public bool ShowPeakLines { get; set; } = true;       // For peak value lines
         public List<BarSettings> Bars { get; set; }
         public MonitorAlertSettings AlertSettings { get; set; }
 

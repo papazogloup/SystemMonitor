@@ -202,29 +202,91 @@ namespace SystemMonitor
                 currentCpuTemperature = GetCpuTemperature();
                 Debug.WriteLine($"CPU Temp: {currentCpuTemperature:F1}°C");
 
+                // Check thresholds and trigger alerts
+                if (alertSystem != null)
+                {
+                    var metrics = new Dictionary<BarType, float>
+                    {
+                        { BarType.CPU, currentCpuUsage },
+                        { BarType.RAM, currentRamUsage },
+                        { BarType.Network, currentNetworkUsage },
+                        { BarType.CPUTemp, currentCpuTemperature },
+                        { BarType.CPUMaxTemp, currentCpuMaxTemperature }
+                    };
+
+                    foreach (var bar in settings.Bars)
+                    {
+                        if (bar.IsVisible && metrics.ContainsKey(bar.Type))
+                        {
+                            float value = metrics[bar.Type];
+                            if (value > bar.Threshold)
+                            {
+                                string message = $"{bar.Type} is above threshold: {value:F1}";
+                                switch (bar.Type)
+                                {
+                                    case BarType.CPU:
+                                        message = $"CPU Usage is above {bar.Threshold}%: {value:F1}%";
+                                        break;
+                                    case BarType.RAM:
+                                        message = $"Memory Usage is above {bar.Threshold}%: {value:F1}%";
+                                        break;
+                                    case BarType.Network:
+                                        message = $"Network Usage is above {bar.Threshold} KB/s: {value:F1} KB/s";
+                                        break;
+                                    case BarType.CPUTemp:
+                                        message = $"CPU Temperature is above {bar.Threshold}°C: {value:F1}°C";
+                                        break;
+                                    case BarType.CPUMaxTemp:
+                                        message = $"CPU Max Temperature is above {bar.Threshold}°C: {value:F1}°C";
+                                        break;
+                                }
+                                alertSystem.TriggerAlert(bar.Type, message);
+                            }
+                        }
+                    }
+                }
+
                 // Update tray icon and tooltip
                 if (trayIcon != null)
                 {
-                    string networkText = currentNetworkUsage >= 1024 
-                        ? $"{currentNetworkUsage / 1024:F1} MB/s"
-                        : $"{currentNetworkUsage:F0} KB/s";
+                    var tooltipLines = new List<string>
+                    {
+                        "   System Monitor   ",
+                        "━━━━━━━━━━━━━━━━━"
+                    };
 
-                    string tooltip = String.Format(
-                        "      System Monitor      \n" +  // Centered title
-                        "━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-                        "CPU Usage:  {0,6:F1}%\n" +
-                        "Memory:     {1,6:F1}%\n" +
-                        "Network:    {2,7}\n" +
-                        "CPU Temp:   {3,6:F1}°\n" +
-                        "CPU Max:    {4,6:F1}°",
-                        currentCpuUsage,
-                        currentRamUsage,
-                        networkText,
-                        currentCpuTemperature,
-                        currentCpuMaxTemperature
-                    );
+                    // Use the ordered bars from settings
+                    foreach (var bar in settings.Bars.Where(b => b.IsVisible))
+                    {
+                        string value = "";
+                        switch (bar.Type)
+                        {
+                            case BarType.CPU:
+                                value = $"CPU: {currentCpuUsage,6:F1}%";
+                                break;
+                            case BarType.RAM:
+                                value = $"RAM: {currentRamUsage,6:F1}%";
+                                break;
+                            case BarType.Network:
+                                value = currentNetworkUsage >= 1024 
+                                    ? $"NET: {currentNetworkUsage / 1024,6:F1} MB/s"
+                                    : $"NET: {currentNetworkUsage,6:F0} KB/s";
+                                break;
+                            case BarType.CPUTemp:
+                                value = $"TMP: {currentCpuTemperature,6:F1}°";
+                                break;
+                            case BarType.CPUMaxTemp:
+                                value = $"MAX: {currentCpuMaxTemperature,6:F1}°";
+                                break;
+                        }
+                        
+                        if (!string.IsNullOrEmpty(value))
+                        {
+                            tooltipLines.Add(value);
+                        }
+                    }
 
-                    trayIcon.Text = tooltip;
+                    trayIcon.Text = string.Join("\n", tooltipLines);
                     UpdateTrayIcon();
                 }
             }
@@ -294,6 +356,8 @@ namespace SystemMonitor
             );
         }
 
+        private Dictionary<BarType, float> peakValues = new();
+
         private Icon CreateTrayIcon(float cpuUsage, float ramUsage, float networkUsage)
         {
             using var bitmap = new Bitmap(16, 16);
@@ -309,7 +373,16 @@ namespace SystemMonitor
                 { BarType.CPUTemp, currentCpuTemperature },
                 { BarType.CPUMaxTemp, currentCpuMaxTemperature }
             };
-            
+
+            // Update peak values
+            foreach (var pair in values)
+            {
+                if (!peakValues.ContainsKey(pair.Key) || pair.Value > peakValues[pair.Key])
+                {
+                    peakValues[pair.Key] = pair.Value;
+                }
+            }
+
             var visibleBars = settings.Bars
                 .Where(b => b.IsVisible)
                 .ToList();
@@ -319,34 +392,95 @@ namespace SystemMonitor
             int extraPixels = 16 % totalBars;
             int currentPos = 0;
 
+            using var grayPen = new Pen(Color.FromArgb(64, 64, 64), 1);  // Dark gray for guide lines
+            using var peakPen = new Pen(Color.FromArgb(128, 128, 128), 1); // Light gray for peak indicators
+            using var thresholdPen = new Pen(Color.FromArgb(255, 0, 0), 1); // Red for threshold
+
             for (int i = 0; i < totalBars; i++)
             {
                 var bar = visibleBars[i];
                 float value = values[bar.Type];
+                float peak = peakValues[bar.Type];
+                float threshold = bar.Threshold;
+
                 float scale = bar.Type == BarType.Network ?
                     Math.Min(value / 10240, 1.0f) :
                     Math.Min(value / 100.0f, 1.0f);
 
+                float peakScale = bar.Type == BarType.Network ?
+                    Math.Min(peak / 10240, 1.0f) :
+                    Math.Min(peak / 100.0f, 1.0f);
+
+                float thresholdScale = bar.Type == BarType.Network ?
+                    Math.Min(threshold / 10240, 1.0f) :
+                    Math.Min(threshold / 100.0f, 1.0f);
+
                 int barSize = baseWidth + (i < extraPixels ? 1 : 0);
                 int barLength = Math.Max(1, (int)(16 * scale));
+                int peakLine = Math.Max(1, (int)(16 * peakScale));
+                int thresholdLine = Math.Max(1, (int)(16 * thresholdScale));
 
                 if (settings.IsHorizontalLayout)
                 {
-                    // Horizontal bars - grow from left to right
+                    // Guide line
+                    if (settings.ShowGuideLines)
+                    {
+                        g.DrawLine(grayPen, 
+                            0, currentPos + barSize/2,
+                            16, currentPos + barSize/2);
+                    }
+
+                    // Colored bar
                     g.FillRectangle(new SolidBrush(bar.Color),
-                        0,                  // Start from left
-                        currentPos,         // Y position
-                        barLength,          // Width based on value
-                        barSize);          // Fixed height
+                        0, currentPos,
+                        barLength, barSize);
+
+                    // Peak indicator
+                    if (settings.ShowPeakLines)
+                    {
+                        g.DrawLine(peakPen,
+                            peakLine, currentPos,
+                            peakLine, currentPos + barSize);
+                    }
+
+                    // Threshold line
+                    if (settings.ShowThresholdLines)
+                    {
+                        g.DrawLine(thresholdPen,
+                            thresholdLine, currentPos,
+                            thresholdLine, currentPos + barSize);
+                    }
                 }
                 else
                 {
-                    // Vertical bars - grow from bottom to top
+                    // Guide line
+                    if (settings.ShowGuideLines)
+                    {
+                        g.DrawLine(grayPen, 
+                            currentPos + barSize/2, 0,
+                            currentPos + barSize/2, 16);
+                    }
+
+                    // Colored bar
                     g.FillRectangle(new SolidBrush(bar.Color),
-                        currentPos,         // X position
-                        16 - barLength,     // Start from bottom
-                        barSize,           // Fixed width
-                        barLength);        // Height based on value
+                        currentPos, 16 - barLength,
+                        barSize, barLength);
+
+                    // Peak indicator
+                    if (settings.ShowPeakLines)
+                    {
+                        g.DrawLine(peakPen,
+                            currentPos, 16 - peakLine,
+                            currentPos + barSize, 16 - peakLine);
+                    }
+
+                    // Threshold line
+                    if (settings.ShowThresholdLines)
+                    {
+                        g.DrawLine(thresholdPen,
+                            currentPos, 16 - thresholdLine,
+                            currentPos + barSize, 16 - thresholdLine);
+                    }
                 }
 
                 currentPos += barSize;

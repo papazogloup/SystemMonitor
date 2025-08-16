@@ -13,61 +13,53 @@ namespace SystemMonitor
     public class AlertSystem
     {
         private readonly MonitorSettings settings;
-        private readonly SoundPlayer? player;
-        
+        private Dictionary<BarType, DateTime> lastAlerts = new();
+
         public AlertSystem(MonitorSettings settings)
         {
             this.settings = settings;
-            if (settings.AlertSettings.SoundEnabled)
-            {
-                // Changed from SystemSounds.Asterisk.Location to just playing the sound directly
-                player = new SoundPlayer();
-            }
         }
-        
-        public void CheckThresholds(Dictionary<BarType, float> currentValues)
+
+        public void TriggerAlert(BarType type, string message)
         {
+            // Check if alerts are enabled
             if (!settings.AlertSettings.IsEnabled) return;
-            
-            foreach (var bar in settings.Bars.Where(b => b.IsVisible))
+
+            // Check if we're still in snooze period
+            if (settings.AlertSettings.SnoozeUntil.TryGetValue(type, out DateTime snoozeTime))
             {
-                if (!currentValues.TryGetValue(bar.Type, out float value)) continue;
-                
-                if (value > bar.Threshold)
-                {
-                    if (!settings.AlertSettings.SnoozeUntil.TryGetValue(bar.Type, out DateTime snoozeTime) ||
-                        DateTime.Now > snoozeTime)
-                    {
-                        ShowAlert(bar.Type, value);
-                    }
-                }
+                if (DateTime.Now < snoozeTime) return;
             }
-        }
-        
-        private void ShowAlert(BarType type, float value)
-        {
+
+            // Check if enough time has passed since last alert (prevent spam)
+            if (lastAlerts.TryGetValue(type, out DateTime lastAlert))
+            {
+                var timeSinceLastAlert = DateTime.Now - lastAlert;
+                if (timeSinceLastAlert.TotalSeconds < 5) return; // Minimum 5 seconds between alerts
+            }
+
+            // Update last alert time
+            lastAlerts[type] = DateTime.Now;
+
+            // Show notification
+            using var notification = new NotifyIcon
+            {
+                Icon = SystemIcons.Warning,
+                Visible = true
+            };
+            notification.ShowBalloonTip(5000, "System Monitor Alert", message, ToolTipIcon.Warning);
+
+            // Play sound if enabled
             if (settings.AlertSettings.SoundEnabled)
             {
-                player?.Play();
+                Console.Beep(800, 200); // Frequency: 800Hz, Duration: 200ms
             }
-            
-            var result = MessageBox.Show(
-                $"{type} value ({value:F1}) exceeds threshold!\n\nSnooze alert?",
-                "Threshold Alert",
-                MessageBoxButtons.YesNoCancel,
-                MessageBoxIcon.Warning
-            );
-            
-            switch (result)
-            {
-                case DialogResult.Yes:
-                    settings.AlertSettings.SnoozeUntil[type] = 
-                        DateTime.Now.AddMinutes(settings.AlertSettings.SnoozeMinutes);
-                    break;
-                case DialogResult.No:
-                    settings.AlertSettings.SnoozeUntil[type] = DateTime.MaxValue;
-                    break;
-            }
+        }
+
+        public void Snooze(BarType type)
+        {
+            var snoozeTime = DateTime.Now.AddMinutes(settings.AlertSettings.SnoozeMinutes);
+            settings.AlertSettings.SnoozeUntil[type] = snoozeTime;
         }
     }
 }
