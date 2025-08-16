@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCopyrightAttribute("Copyright © 2024")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("System monitoring tool with CPU, RAM, Network and Temperature monitoring")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.1.0-alpha+e96e6a67bf9fbe55fe8fedea920acb2d8341ef8a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.1.0-alpha+1980a0745ef97eae3c8a993edf12e9f30f919068")]
 [assembly: System.Reflection.AssemblyProductAttribute("System Monitor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SystemMonitor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.1.0.0")]

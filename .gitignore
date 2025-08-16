@@ -1,4 +1,7 @@
 bin/
+bin\
+[Bb]in/
+[Bb]in\
 obj/
 .vs/
 *.exe
