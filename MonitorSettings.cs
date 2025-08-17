@@ -11,6 +11,19 @@ namespace SystemMonitor
         CPUMaxTemp
     }
 
+    public static class BarTypeExtensions 
+    {
+        public static string ToDisplayString(this BarType type)
+        {
+            return type switch
+            {
+                BarType.CPUTemp => "CPU Temperature",
+                BarType.CPUMaxTemp => "CPU Max Temperature",
+                _ => type.ToString()
+            };
+        }
+    }
+
     public class MonitorSettings
     {
         public bool IsHorizontalLayout { get; set; }

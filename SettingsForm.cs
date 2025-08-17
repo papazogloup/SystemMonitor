@@ -54,7 +54,7 @@ namespace SystemMonitor
                 }
                 if (row.Cells["Type"] != null)
                 {
-                    row.Cells["Type"].Value = bar.Type.ToString();
+                    row.Cells["Type"].Value = bar.Type.ToDisplayString();
                 }
                 var visibleCell = row.Cells["Visible"];
                 if (visibleCell != null)
@@ -180,34 +180,33 @@ namespace SystemMonitor
                 {
                     Name = "DragHandle",
                     HeaderText = "",
-                    Width = 30,
-                    ReadOnly = true
+                    FillWeight = 10
                 },
                 new DataGridViewTextBoxColumn
                 {
                     Name = "Type",
                     HeaderText = "Type",
-                    Width = 150,
+                    FillWeight = 55,
                     ReadOnly = true
                 },
                 new DataGridViewCheckBoxColumn
                 {
                     Name = "Visible",
                     HeaderText = "Visible",
-                    Width = 60
+                    FillWeight = 11,
                 },
                 new DataGridViewButtonColumn
                 {
                     Name = "Color",
                     HeaderText = "Color",
-                    Width = 80,
+                    FillWeight = 10,
                     FlatStyle = FlatStyle.Flat
                 },
                 new DataGridViewTextBoxColumn
                 {
                     Name = "Threshold",
                     HeaderText = "Threshold",
-                    Width = 80
+                    FillWeight = 14,
                 }
             });
 
