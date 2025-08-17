@@ -34,6 +34,15 @@ namespace SystemMonitor
         {
             if (dataGridBars == null) return;
 
+            // Update checkboxes from tempSettings
+            chkHorizontal.Checked = tempSettings.IsHorizontalLayout;
+            chkGuideLines.Checked = tempSettings.ShowGuideLines;
+            chkThresholdLines.Checked = tempSettings.ShowThresholdLines;
+            chkPeakLines.Checked = tempSettings.ShowPeakLines;
+            chkAlerts.Checked = tempSettings.AlertSettings.IsEnabled;
+            chkSound.Checked = tempSettings.AlertSettings.SoundEnabled;
+            numSnooze.Value = tempSettings.AlertSettings.SnoozeMinutes;
+
             dataGridBars.Rows.Clear();
             foreach (var bar in tempSettings.Bars) // Χρήση tempSettings
             {
@@ -368,6 +377,7 @@ namespace SystemMonitor
             };
 
             chkHorizontal.CheckedChanged += (s, e) => {
+                tempSettings.IsHorizontalLayout = chkHorizontal.Checked;  // Add this line
                 hasChanges = true;
                 btnApply.Enabled = true;
             };
