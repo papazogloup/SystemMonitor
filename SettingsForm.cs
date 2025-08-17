@@ -350,16 +350,19 @@ namespace SystemMonitor
 
             // Add change handlers
             chkGuideLines.CheckedChanged += (s, e) => {
+                tempSettings.ShowGuideLines = chkGuideLines.Checked;
                 hasChanges = true;
                 btnApply.Enabled = true;
             };
 
             chkThresholdLines.CheckedChanged += (s, e) => {
+                tempSettings.ShowThresholdLines = chkThresholdLines.Checked;
                 hasChanges = true;
                 btnApply.Enabled = true;
             };
 
             chkPeakLines.CheckedChanged += (s, e) => {
+                tempSettings.ShowPeakLines = chkPeakLines.Checked;
                 hasChanges = true;
                 btnApply.Enabled = true;
             };
