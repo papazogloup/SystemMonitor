@@ -62,10 +62,55 @@ namespace SystemMonitor
         // Add method to reset settings
         public void ResetToDefaults()
         {
-            var defaults = new MonitorSettings();
-            IsHorizontalLayout = defaults.IsHorizontalLayout;
-            Bars = defaults.Bars.Select(b => b.Clone()).ToList();
-            AlertSettings = defaults.AlertSettings.Clone();
+            // Reset basic settings
+            IsHorizontalLayout = false;
+            ShowGuideLines = true;
+            ShowThresholdLines = true;
+            ShowPeakLines = true;
+
+            // Reset alert settings
+            AlertSettings = new MonitorAlertSettings
+            {
+                IsEnabled = true,
+                SnoozeMinutes = 5,
+                SoundEnabled = true,
+                SnoozeUntil = new Dictionary<BarType, DateTime>()
+            };
+
+            // Reset bars with default colors and order
+            Bars = new List<BarSettings>
+            {
+                new() { 
+                    Type = BarType.CPU, 
+                    Color = Color.FromArgb(255, 0, 120, 255),  // Έντονο μπλε
+                    IsVisible = true, 
+                    Threshold = 90 
+                },
+                new() { 
+                    Type = BarType.RAM, 
+                    Color = Color.FromArgb(255, 0, 255, 0),    // Έντονο πράσινο
+                    IsVisible = true, 
+                    Threshold = 90 
+                },
+                new() { 
+                    Type = BarType.Network, 
+                    Color = Color.FromArgb(255, 220, 20, 60),  // Μπορντό
+                    IsVisible = true, 
+                    Threshold = 1000 
+                },
+                new() { 
+                    Type = BarType.CPUTemp, 
+                    Color = Color.FromArgb(255, 255, 255, 0),  // Κίτρινο
+                    IsVisible = true, 
+                    Threshold = 80 
+                },
+                new() { 
+                    Type = BarType.CPUMaxTemp, 
+                    Color = Color.FromArgb(255, 255, 140, 0),  // Πορτοκαλί
+                    IsVisible = true, 
+                    Threshold = 90 
+                }
+            };
         }
 
         public MonitorSettings Clone()

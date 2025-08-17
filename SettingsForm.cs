@@ -472,8 +472,13 @@ namespace SystemMonitor
 
         private void ResetToDefaults()
         {
-            settings = new MonitorSettings();
+            // Create new settings with defaults
+            tempSettings = new MonitorSettings();
+            
+            // Reload UI with new settings
             LoadSettings();
+            
+            // Mark as changed to enable Apply button
             hasChanges = true;
             if (btnApply != null)
             {
