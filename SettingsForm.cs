@@ -5,6 +5,7 @@ namespace SystemMonitor
     public partial class SettingsForm : Form
     {
         private MonitorSettings settings;
+        private MonitorSettings tempSettings; // Clone αρχικών ρυθμίσεων
         private bool hasChanges = false;
         private readonly ColorDialog colorDialog = new();
         private CheckBox? chkHorizontal;
@@ -20,11 +21,11 @@ namespace SystemMonitor
         private CheckBox? chkThresholdLines;
         private CheckBox? chkPeakLines;
         private int dragRowIndex = -1;
-        private List<BarSettings> tempBars = new();
 
         public SettingsForm(MonitorSettings currentSettings)
         {
             settings = currentSettings;
+            tempSettings = currentSettings.Clone(); // Clone αρχικών ρυθμίσεων
             InitializeComponent();
             LoadSettings();
         }
@@ -32,12 +33,9 @@ namespace SystemMonitor
         private void LoadSettings()
         {
             if (dataGridBars == null) return;
-            
-            // Create working copy of bars
-            tempBars = settings.Bars.Select(b => b.Clone()).ToList();
 
             dataGridBars.Rows.Clear();
-            foreach (var bar in tempBars)
+            foreach (var bar in tempSettings.Bars) // Χρήση tempSettings
             {
                 var row = dataGridBars.Rows[dataGridBars.Rows.Add()];
                 var dragHandle = row.Cells["DragHandle"];
@@ -403,7 +401,7 @@ namespace SystemMonitor
                         colorDialog.Color = currentColor;
                         if (colorDialog.ShowDialog() == DialogResult.OK)
                         {
-                            tempBars[e.RowIndex].Color = colorDialog.Color;
+                            tempSettings.Bars[e.RowIndex].Color = colorDialog.Color;
                             cell.Tag = colorDialog.Color;
                             dataGridBars.InvalidateCell(cell);
                             hasChanges = true;
@@ -433,31 +431,20 @@ namespace SystemMonitor
             {
                 if (Owner is SystemTrayApp app)
                 {
-                    // Apply temp bars to actual settings
-                    settings.Bars = tempBars.Select(b => b.Clone()).ToList();
+                    // Αντιγραφή όλων των ρυθμίσεων από το temp στο κανονικό
+                    settings.Bars = tempSettings.Bars.Select(b => b.Clone()).ToList();
+                    settings.IsHorizontalLayout = tempSettings.IsHorizontalLayout;
+                    settings.AlertSettings = tempSettings.AlertSettings.Clone();
+                    settings.ShowGuideLines = tempSettings.ShowGuideLines;
+                    settings.ShowThresholdLines = tempSettings.ShowThresholdLines;
+                    settings.ShowPeakLines = tempSettings.ShowPeakLines;
 
-                    // Get current values from controls
-                    settings.IsHorizontalLayout = chkHorizontal?.Checked ?? false;
-                    settings.AlertSettings.IsEnabled = chkAlerts?.Checked ?? true;
-                    settings.AlertSettings.SnoozeMinutes = (int)(numSnooze?.Value ?? 5);
-                    settings.AlertSettings.SoundEnabled = chkSound?.Checked ?? true;
-
-                    // Get display options values
-                    settings.ShowGuideLines = chkGuideLines?.Checked ?? true;
-                    settings.ShowThresholdLines = chkThresholdLines?.Checked ?? true;
-                    settings.ShowPeakLines = chkPeakLines?.Checked ?? true;
-
-                    // Apply changes
+                    // Εφαρμογή αλλαγών
                     app.UpdateSettings(settings);
                     SettingsManager.SaveSettings(settings);
 
-                    // Reset change tracking
                     hasChanges = false;
-                    if (btnApply != null)
-                    {
-                        btnApply.Enabled = false;
-                    }
-
+                    btnApply.Enabled = false;
                     return true;
                 }
                 return false;
@@ -556,11 +543,11 @@ namespace SystemMonitor
                 return;
 
             // Get the row being dragged
-            var rowData = settings.Bars[dragRowIndex];
+            var rowData = tempSettings.Bars[dragRowIndex]; // Χρήση tempSettings
             
             // Remove from old position and insert at new position
-            settings.Bars.RemoveAt(dragRowIndex);
-            settings.Bars.Insert(targetRowIndex, rowData);
+            tempSettings.Bars.RemoveAt(dragRowIndex);
+            tempSettings.Bars.Insert(targetRowIndex, rowData);
 
             // Refresh grid and mark changes
             LoadSettings();

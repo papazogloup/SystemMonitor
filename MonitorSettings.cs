@@ -67,6 +67,25 @@ namespace SystemMonitor
             Bars = defaults.Bars.Select(b => b.Clone()).ToList();
             AlertSettings = defaults.AlertSettings.Clone();
         }
+
+        public MonitorSettings Clone()
+        {
+            var clone = new MonitorSettings
+            {
+                IsHorizontalLayout = this.IsHorizontalLayout,
+                ShowGuideLines = this.ShowGuideLines,
+                ShowThresholdLines = this.ShowThresholdLines,
+                ShowPeakLines = this.ShowPeakLines
+            };
+
+            // Clone AlertSettings
+            clone.AlertSettings = this.AlertSettings.Clone();
+            
+            // Clone Bars
+            clone.Bars = this.Bars.Select(b => b.Clone()).ToList();
+            
+            return clone;
+        }
     }
 
     public class BarSettings
