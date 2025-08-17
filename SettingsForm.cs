@@ -130,8 +130,8 @@ namespace SystemMonitor
         {
             // Form settings
             this.Text = "System Monitor Settings";
-            this.ClientSize = new Size(600, 460);
-            this.MinimumSize = new Size(500, 460);
+            this.ClientSize = new Size(600, 400);
+            this.MinimumSize = new Size(500, 400);
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -148,8 +148,8 @@ namespace SystemMonitor
             dataGridBars = new DataGridView
             {
                 Location = new Point(12, 35),
-                Size = new Size(576, 203),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom, // Πρόσθεσε Bottom
+                Size = new Size(576, 156),  // Μείωση του ύψους από 203 σε 180
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, // Αφαίρεση του Bottom
                 AllowDrop = true,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, // Άλλαξε σε Fill
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
@@ -221,7 +221,7 @@ namespace SystemMonitor
             var alertPanel = new GroupBox
             {
                 Text = "Alert Settings",
-                Location = new Point(12, 245),
+                Location = new Point(12, 200),
                 Size = new Size(576, 65),
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
@@ -237,7 +237,7 @@ namespace SystemMonitor
             var lblSnooze = new Label
             {
                 Text = "Snooze Minutes:",
-                Location = new Point(180, 32),  // Moved left
+                Location = new Point(200, 32),  // Moved left
                 AutoSize = true
             };
 
@@ -246,14 +246,14 @@ namespace SystemMonitor
                 Minimum = 1,
                 Maximum = 60,
                 Value = settings.AlertSettings.SnoozeMinutes,
-                Location = new Point(270, 30),  // Moved left
+                Location = new Point(317, 30),  // Moved left
                 Size = new Size(50, 20)         // Reduced width
             };
 
             chkSound = new CheckBox
             {
                 Text = "Enable Sound",
-                Location = new Point(340, 30),  // Moved left
+                Location = new Point(420, 30),  // Moved left
                 AutoSize = true,
                 Checked = settings.AlertSettings.SoundEnabled
             };
@@ -266,7 +266,7 @@ namespace SystemMonitor
             linesPanel = new GroupBox
             {
                 Text = "Display Options",
-                Location = new Point(12, 315),
+                Location = new Point(12, 275),
                 Size = new Size(576, 65),
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
@@ -290,7 +290,7 @@ namespace SystemMonitor
             chkPeakLines = new CheckBox
             {
                 Text = "Show Peak Lines",
-                Location = new Point(380, 25),
+                Location = new Point(420, 25),
                 AutoSize = true,
                 Checked = settings.ShowPeakLines
             };
@@ -302,7 +302,7 @@ namespace SystemMonitor
             // Button panel
             var buttonPanel = new Panel
             {
-                Location = new Point(12, 385),
+                Location = new Point(12, 345),
                 Size = new Size(576, 40),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
