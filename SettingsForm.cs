@@ -423,6 +423,20 @@ namespace SystemMonitor
                 }
             };
 
+            // Στο InitializeComponent(), μετά τους υπάρχοντες event handlers για το dataGridBars:
+            dataGridBars.CellEndEdit += (s, e) => {
+                if (e.ColumnIndex == dataGridBars.Columns["Threshold"].Index)
+                {
+                    var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                    if (float.TryParse(cell.Value?.ToString(), out float threshold))
+                    {
+                        tempSettings.Bars[e.RowIndex].Threshold = threshold;
+                        hasChanges = true;
+                        btnApply.Enabled = true;
+                    }
+                }
+            };
+
             // Add controls to form
             this.Controls.AddRange(new Control[] {
                 chkHorizontal,
