@@ -838,8 +838,32 @@ namespace SystemMonitor
                 }
             }
             
+            // Stop speech if alerts or sound were disabled
+            if (!newSettings.AlertSettings.IsEnabled || !newSettings.AlertSettings.SoundEnabled)
+            {
+                StopActiveSpeech();
+                Debug.WriteLine("Speech stopped due to settings change");
+            }
+            
             settings = newSettings;
             UpdateTrayIcon();
+        }
+
+        // Add this method to stop any active speech:
+        private void StopActiveSpeech()
+        {
+            try
+            {
+                if (speechSynthesizer != null)
+                {
+                    speechSynthesizer.SpeakAsyncCancelAll();
+                    Debug.WriteLine("Active speech cancelled");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error stopping speech: {ex.Message}");
+            }
         }
 
         // Also update the ActivateSnooze method to better handle disabled alerts:
@@ -847,6 +871,9 @@ namespace SystemMonitor
         {
             Debug.WriteLine($"ActivateSnooze called. Current snooze state: {isSnoozeActive}");
             Debug.WriteLine($"Alerts enabled: {settings.AlertSettings.IsEnabled}");
+
+            // Stop any active speech immediately
+            StopActiveSpeech();
 
             // If already snoozed, cancel snooze (regardless of alert settings)
             if (isSnoozeActive)

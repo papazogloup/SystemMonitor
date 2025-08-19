@@ -7,6 +7,7 @@ namespace SystemMonitor
         private MonitorSettings settings;
         private MonitorSettings tempSettings; // Clone αρχικών ρυθμίσεων
         private bool hasChanges = false;
+        private bool hasUnsavedChanges = false;
         private readonly ColorDialog colorDialog = new();
         private CheckBox? chkHorizontal;
         private DataGridView? dataGridBars;
@@ -28,6 +29,9 @@ namespace SystemMonitor
             tempSettings = currentSettings.Clone(); // Clone αρχικών ρυθμίσεων
             InitializeComponent();
             LoadSettings();
+            // Apply should be disabled initially since no changes have been made
+            btnApply.Enabled = false;
+            hasUnsavedChanges = false;
         }
 
         private void LoadSettings()
@@ -356,50 +360,142 @@ namespace SystemMonitor
             };
             btnCancel.Click += (s, e) => this.Close();
 
-            // Add change handlers
-            chkGuideLines.CheckedChanged += (s, e) => {
-                tempSettings.ShowGuideLines = chkGuideLines.Checked;
-                hasChanges = true;
-                btnApply.Enabled = true;
-            };
+            // Add controls to form
+            this.Controls.AddRange(new Control[] {
+                chkHorizontal,
+                dataGridBars,
+                alertPanel,
+                linesPanel,
+                buttonPanel
+            });
 
-            chkThresholdLines.CheckedChanged += (s, e) => {
-                tempSettings.ShowThresholdLines = chkThresholdLines.Checked;
-                hasChanges = true;
-                btnApply.Enabled = true;
-            };
+            buttonPanel.Controls.AddRange(new Control[] {
+                btnReset, btnOK, btnApply, btnCancel
+            });
 
-            chkPeakLines.CheckedChanged += (s, e) => {
-                tempSettings.ShowPeakLines = chkPeakLines.Checked;
-                hasChanges = true;
-                btnApply.Enabled = true;
-            };
+            // Attach change handlers at the end
+            AttachChangeHandlers();
+        }
 
-            chkHorizontal.CheckedChanged += (s, e) => {
-                tempSettings.IsHorizontalLayout = chkHorizontal.Checked;  // Add this line
-                hasChanges = true;
-                btnApply.Enabled = true;
-            };
+        // Add this method to check if current values differ from original settings:
+        private bool HasChanges()
+        {
+            // Check alert settings
+            if (chkAlerts.Checked != settings.AlertSettings.IsEnabled ||
+                chkSound.Checked != settings.AlertSettings.SoundEnabled ||
+                (int)numSnooze.Value != settings.AlertSettings.SnoozeMinutes)
+            {
+                return true;
+            }
 
+            // Check bars settings
+            for (int i = 0; i < settings.Bars.Count && i < dataGridBars.Rows.Count; i++)
+            {
+                var row = dataGridBars.Rows[i];
+                var originalBar = settings.Bars[i];
+                
+                bool isVisible = (bool)(row.Cells["Visible"].Value ?? false);
+                float threshold = Convert.ToSingle(row.Cells["Threshold"].Value ?? 0);
+                // FIX: Get color from Tag, not Value
+                Color color = (Color)(row.Cells["Color"].Tag ?? Color.Blue);
+                
+                if (isVisible != originalBar.IsVisible ||
+                    Math.Abs(threshold - originalBar.Threshold) > 0.1f ||
+                    color != originalBar.Color)
+                {
+                    return true;
+                }
+            }
+
+            // Check layout settings
+            if (chkHorizontal.Checked != settings.IsHorizontalLayout ||
+                chkGuideLines.Checked != settings.ShowGuideLines ||
+                chkPeakLines.Checked != settings.ShowPeakLines ||
+                chkThresholdLines.Checked != settings.ShowThresholdLines)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        // Add this method to update Apply button state:
+        private void UpdateApplyButtonState()
+        {
+            hasUnsavedChanges = HasChanges();
+            btnApply.Enabled = hasUnsavedChanges;
+        }
+
+        // Add change event handlers to all controls:
+        private void AttachChangeHandlers()
+        {
+            // Alert settings - NO IMMEDIATE UPDATES, only tempSettings changes
             chkAlerts.CheckedChanged += (s, e) => {
                 tempSettings.AlertSettings.IsEnabled = chkAlerts.Checked;
-                hasChanges = true;
-                btnApply.Enabled = true;
+                UpdateApplyButtonState();
             };
-
-            numSnooze.ValueChanged += (s, e) => {
-                tempSettings.AlertSettings.SnoozeMinutes = (int)numSnooze.Value;
-                hasChanges = true;
-                btnApply.Enabled = true;
-            };
-
+            
             chkSound.CheckedChanged += (s, e) => {
                 tempSettings.AlertSettings.SoundEnabled = chkSound.Checked;
-                hasChanges = true;
-                btnApply.Enabled = true;
+                UpdateApplyButtonState();
+            };
+            
+            numSnooze.ValueChanged += (s, e) => {
+                tempSettings.AlertSettings.SnoozeMinutes = (int)numSnooze.Value;
+                UpdateApplyButtonState();
+            };
+            
+            // Layout settings
+            chkHorizontal.CheckedChanged += (s, e) => {
+                tempSettings.IsHorizontalLayout = chkHorizontal.Checked;
+                UpdateApplyButtonState();
+            };
+            chkGuideLines.CheckedChanged += (s, e) => {
+                tempSettings.ShowGuideLines = chkGuideLines.Checked;
+                UpdateApplyButtonState();
+            };
+            chkPeakLines.CheckedChanged += (s, e) => {
+                tempSettings.ShowPeakLines = chkPeakLines.Checked;
+                UpdateApplyButtonState();
+            };
+            chkThresholdLines.CheckedChanged += (s, e) => {
+                tempSettings.ShowThresholdLines = chkThresholdLines.Checked;
+                UpdateApplyButtonState();
+            };
+            
+            // DataGridView changes
+            dataGridBars.CellValueChanged += (s, e) => {
+                if (e.RowIndex >= 0 && e.RowIndex < tempSettings.Bars.Count)
+                {
+                    if (e.ColumnIndex == dataGridBars.Columns["Visible"].Index)
+                    {
+                        var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                        if (cell.Value != null)
+                        {
+                            tempSettings.Bars[e.RowIndex].IsVisible = Convert.ToBoolean(cell.Value);
+                        }
+                    }
+                    else if (e.ColumnIndex == dataGridBars.Columns["Threshold"].Index)
+                    {
+                        var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                        if (float.TryParse(cell.Value?.ToString(), out float threshold))
+                        {
+                            tempSettings.Bars[e.RowIndex].Threshold = threshold;
+                        }
+                    }
+                }
+                UpdateApplyButtonState();
+            };
+            
+            dataGridBars.CurrentCellDirtyStateChanged += (s, e) =>
+            {
+                if (dataGridBars.IsCurrentCellDirty)
+                {
+                    dataGridBars.CommitEdit(DataGridViewDataErrorContexts.Commit);
+                }
             };
 
-            // Πρόσθεσε το click handler για το color picker:
+            // Keep the existing color and threshold handlers for immediate UI feedback
             dataGridBars.CellClick += (s, e) => {
                 if (dataGridBars == null || e.RowIndex < 0) return;
 
@@ -414,14 +510,12 @@ namespace SystemMonitor
                             tempSettings.Bars[e.RowIndex].Color = colorDialog.Color;
                             cell.Tag = colorDialog.Color;
                             dataGridBars.InvalidateCell(cell);
-                            hasChanges = true;
-                            btnApply.Enabled = true;
+                            UpdateApplyButtonState();
                         }
                     }
                 }
             };
 
-            // Στο InitializeComponent(), μετά τους υπάρχοντες event handlers για το dataGridBars:
             dataGridBars.CellEndEdit += (s, e) => {
                 if (e.ColumnIndex == dataGridBars.Columns["Threshold"].Index)
                 {
@@ -429,75 +523,10 @@ namespace SystemMonitor
                     if (float.TryParse(cell.Value?.ToString(), out float threshold))
                     {
                         tempSettings.Bars[e.RowIndex].Threshold = threshold;
-                        hasChanges = true;
-                        btnApply.Enabled = true;
+                        UpdateApplyButtonState();
                     }
                 }
             };
-
-            // In InitializeComponent(), add these event handlers after the existing ones:
-
-            // Handle checkbox clicks for Visible column
-            dataGridBars.CellContentClick += (s, e) => {
-                if (e.ColumnIndex == dataGridBars.Columns["Visible"].Index && e.RowIndex >= 0)
-                {
-                    // Force the cell to end edit mode to get the new value
-                    dataGridBars.EndEdit();
-                    
-                    var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex] as DataGridViewCheckBoxCell;
-                    if (cell != null && cell.Value != null)
-                    {
-                        bool isVisible = Convert.ToBoolean(cell.Value);
-                        tempSettings.Bars[e.RowIndex].IsVisible = isVisible;
-                        hasChanges = true;
-                        if (btnApply != null)
-                        {
-                            btnApply.Enabled = true;
-                        }
-                    }
-                }
-            };
-
-            // Handle when checkbox value changes
-            dataGridBars.CellValueChanged += (s, e) => {
-                if (e.ColumnIndex == dataGridBars.Columns["Visible"].Index && e.RowIndex >= 0)
-                {
-                    var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex];
-                    if (cell.Value != null)
-                    {
-                        bool isVisible = Convert.ToBoolean(cell.Value);
-                        tempSettings.Bars[e.RowIndex].IsVisible = isVisible;
-                        hasChanges = true;
-                        if (btnApply != null)
-                        {
-                            btnApply.Enabled = true;
-                        }
-                    }
-                }
-            };
-
-            // Ensure checkbox changes are committed immediately
-            dataGridBars.CurrentCellDirtyStateChanged += (s, e) => {
-                if (dataGridBars.IsCurrentCellDirty && 
-                    dataGridBars.CurrentCell != null &&
-                    dataGridBars.CurrentCell.ColumnIndex == dataGridBars.Columns["Visible"].Index)
-                {
-                    dataGridBars.CommitEdit(DataGridViewDataErrorContexts.Commit);
-                }
-            };
-
-            // Add controls to form
-            this.Controls.AddRange(new Control[] {
-                chkHorizontal,
-                dataGridBars,
-                alertPanel,
-                linesPanel,
-                buttonPanel
-            });
-
-            buttonPanel.Controls.AddRange(new Control[] {
-                btnReset, btnOK, btnApply, btnCancel
-            });
         }
 
         private bool ApplySettings()
@@ -519,12 +548,17 @@ namespace SystemMonitor
                     mainForm.UpdateSettings(settings);
                 }
 
+                // Update the original settings to match current
+                //originalSettings = currentSettings.Clone();
+                
                 hasChanges = false;
+                hasUnsavedChanges = false;
                 if (btnApply != null)
                 {
                     btnApply.Enabled = false;
                 }
                 
+                // REMOVED: MessageBox.Show("Settings applied successfully!", "Settings", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return true;
             }
             catch (Exception ex)
