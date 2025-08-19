@@ -143,7 +143,7 @@ namespace SystemMonitor
 
             // Create tray menu
             trayMenu = new ContextMenuStrip();
-            trayMenu.Items.Add("Options...", null, OnSettings);
+            trayMenu.Items.Add("Settings...", null, OnSettings);  // Changed from "Options..." to "Settings..."
             trayMenu.Items.Add("About", null, OnAbout);
             trayMenu.Items.Add("-"); // separator
             trayMenu.Items.Add("Exit", null, OnExit);
@@ -156,22 +156,13 @@ namespace SystemMonitor
                 Visible = true
             };
 
-            // Remove any existing click handlers and add the correct ones
+            // Simple single click for snooze - with better logic
             trayIcon.MouseClick += (s, e) => 
             {
                 if (e.Button == MouseButtons.Left)
                 {
-                    // Single click = Snooze
+                    Debug.WriteLine("Left click detected");
                     ActivateSnooze();
-                }
-            };
-
-            trayIcon.MouseDoubleClick += (s, e) => 
-            {
-                if (e.Button == MouseButtons.Left)
-                {
-                    // Double click = Settings
-                    ShowSettings();
                 }
             };
         }
@@ -273,51 +264,85 @@ namespace SystemMonitor
                 // Update tray icon and tooltip - ONLY SHOW VISIBLE BARS
                 if (trayIcon != null)
                 {
-                    var tooltipLines = new List<string>();
+                    // Create tooltip text with length limit
+                    string tooltipText;
 
-                    // Add snooze status if active
                     if (isSnoozeActive && DateTime.Now < snoozeUntil)
                     {
                         var remaining = snoozeUntil - DateTime.Now;
-                        tooltipLines.Add($"Snoozed: {remaining.Minutes:D2}:{remaining.Seconds:D2}");
-                    }
-
-                    // Use the ordered bars from settings - ONLY VISIBLE ONES
-                    foreach (var bar in settings.Bars.Where(b => b.IsVisible))
-                    {
-                        string value = "";
-                        switch (bar.Type)
+                        var lines = new List<string>
                         {
-                            case BarType.CPU:
-                                value = $"CPU: {currentCpuUsage:F1}%";
-                                break;
-                            case BarType.RAM:
-                                value = $"RAM: {currentRamUsage:F1}%";
-                                break;
-                            case BarType.Network:
-                                value = currentNetworkUsage >= 1024 
-                                    ? $"NET: {currentNetworkUsage / 1024:F1} MB/s"
-                                    : $"NET: {currentNetworkUsage:F0} KB/s";
-                                break;
-                            case BarType.CPUTemp:
-                                value = $"TMP: {currentCpuTemperature:F1}°";
-                                break;
-                            case BarType.CPUMaxTemp:
-                                value = $"MAX: {currentCpuMaxTemperature:F1}°";
-                                break;
+                            $"Snoozed: {remaining.Minutes:D2}:{remaining.Seconds:D2}",
+                            "Click to cancel snooze"
+                        };
+                        
+                        // Add visible bars info if space allows
+                        foreach (var bar in settings.Bars.Where(b => b.IsVisible).Take(2))
+                        {
+                            switch (bar.Type)
+                            {
+                                case BarType.CPU:
+                                    lines.Add($"CPU: {currentCpuUsage:F1}%");
+                                    break;
+                                case BarType.RAM:
+                                    lines.Add($"RAM: {currentRamUsage:F1}%");
+                                    break;
+                                case BarType.Network:
+                                    lines.Add($"NET: {(currentNetworkUsage >= 1024 ? $"{currentNetworkUsage / 1024:F1}MB/s" : $"{currentNetworkUsage:F0}KB/s")}");
+                                    break;
+                                case BarType.CPUTemp:
+                                    lines.Add($"TMP: {currentCpuTemperature:F1}°");
+                                    break;
+                                case BarType.CPUMaxTemp:
+                                    lines.Add($"MAX: {currentCpuMaxTemperature:F1}°");
+                                    break;
+                            }
                         }
                         
-                        if (!string.IsNullOrEmpty(value))
+                        tooltipText = string.Join("\n", lines);
+                    }
+                    else
+                    {
+                        var lines = new List<string>();
+                        
+                        // Check if there are active alerts
+                        bool hasActiveAlerts = blinkStates.Any(bs => bs.Value);
+                        
+                        if (hasActiveAlerts)
                         {
-                            tooltipLines.Add(value);
+                            lines.Add("ALERT ACTIVE!");
+                            lines.Add("Click to snooze");
                         }
+                        
+                        // Add visible bars info
+                        foreach (var bar in settings.Bars.Where(b => b.IsVisible))
+                        {
+                            switch (bar.Type)
+                            {
+                                case BarType.CPU:
+                                    lines.Add($"CPU: {currentCpuUsage:F1}%");
+                                    break;
+                                case BarType.RAM:
+                                    lines.Add($"RAM: {currentRamUsage:F1}%");
+                                    break;
+                                case BarType.Network:
+                                    lines.Add($"NET: {(currentNetworkUsage >= 1024 ? $"{currentNetworkUsage / 1024:F1}MB/s" : $"{currentNetworkUsage:F0}KB/s")}");
+                                    break;
+                                case BarType.CPUTemp:
+                                    lines.Add($"TMP: {currentCpuTemperature:F1}°");
+                                    break;
+                                case BarType.CPUMaxTemp:
+                                    lines.Add($"MAX: {currentCpuMaxTemperature:F1}°");
+                                    break;
+                            }
+                        }
+                        
+                        tooltipText = string.Join("\n", lines);
                     }
 
-                    // Create tooltip text with length limit (Windows tooltip limit is ~127 characters)
-                    string tooltipText = string.Join("\n", tooltipLines);
-                    if (tooltipText.Length > 120) // Keep some margin
+                    // Apply length limit
+                    if (tooltipText.Length > 120)
                     {
-                        // Truncate to safe length
                         tooltipText = tooltipText.Substring(0, 117) + "...";
                     }
 
@@ -327,7 +352,6 @@ namespace SystemMonitor
                     }
                     catch (ArgumentOutOfRangeException)
                     {
-                        // Fallback to minimal tooltip
                         trayIcon.Text = "System Monitor";
                     }
                     
@@ -741,6 +765,43 @@ namespace SystemMonitor
         // Add the snooze functionality:
         private void ActivateSnooze()
         {
+            Debug.WriteLine($"ActivateSnooze called. Current snooze state: {isSnoozeActive}");
+            Debug.WriteLine($"Active blink states: {string.Join(", ", blinkStates.Where(bs => bs.Value).Select(bs => bs.Key))}");
+
+            // If already snoozed, cancel snooze
+            if (isSnoozeActive)
+            {
+                isSnoozeActive = false;
+                snoozeUntil = DateTime.MinValue;
+                
+                Debug.WriteLine("Snooze cancelled");
+                
+                if (trayIcon != null)
+                {
+                    trayIcon.ShowBalloonTip(2000, 
+                        "System Monitor", 
+                        "Snooze cancelled", 
+                        ToolTipIcon.Info);
+                }
+                return;
+            }
+
+            // Check if there are any active alerts (blinking states)
+            if (!blinkStates.Any(bs => bs.Value))
+            {
+                // No active alerts - show info message
+                if (trayIcon != null)
+                {
+                    trayIcon.ShowBalloonTip(2000, 
+                        "System Monitor", 
+                        "No active alerts to snooze", 
+                        ToolTipIcon.Info);
+                }
+                Debug.WriteLine("No active alerts to snooze");
+                return;
+            }
+
+            // Activate snooze
             if (settings.AlertSettings.SnoozeMinutes > 0)
             {
                 snoozeUntil = DateTime.Now.AddMinutes(settings.AlertSettings.SnoozeMinutes);
@@ -766,6 +827,16 @@ namespace SystemMonitor
                 blinkTimers.Clear();
                 blinkStates.Clear();
                 UpdateTrayIcon();
+            }
+            else
+            {
+                if (trayIcon != null)
+                {
+                    trayIcon.ShowBalloonTip(2000, 
+                        "System Monitor", 
+                        "Snooze time not configured", 
+                        ToolTipIcon.Warning);
+                }
             }
         }
 
@@ -812,21 +883,16 @@ namespace SystemMonitor
                 };
 
                 // Create voice messages with current values
-                var voiceMessages = new Dictionary<BarType, string>();
-                
-                if (currentValues.TryGetValue(type, out float currentValue))
+                var voiceMessages = new Dictionary<BarType, string>
                 {
-                    voiceMessages = new Dictionary<BarType, string>
-                    {
-                        { BarType.CPU, $"CPU usage high at {currentValue:F0} percent" },
-                        { BarType.RAM, $"Memory usage high at {currentValue:F0} percent" },  
-                        { BarType.Network, currentValue >= 1024 ? 
-                            $"Network usage high at {currentValue/1024:F1} megabytes per second" : 
-                            $"Network usage high at {currentValue:F0} kilobytes per second" },
-                        { BarType.CPUTemp, $"CPU temperature high at {currentValue:F0} degrees celsius" },
-                        { BarType.CPUMaxTemp, $"Max temperature critical at {currentValue:F0} degrees celsius" }
-                    };
-                }
+                    { BarType.CPU, $"CPU usage high at {currentCpuUsage:F0} percent" },
+                    { BarType.RAM, $"Memory usage high at {currentRamUsage:F0} percent" },  
+                    { BarType.Network, currentNetworkUsage >= 1024 ? 
+                        $"Network usage high at {currentNetworkUsage/1024:F1} megabytes per second" : 
+                        $"Network usage high at {currentNetworkUsage:F0} kilobytes per second" },
+                    { BarType.CPUTemp, $"CPU temperature high at {currentCpuTemperature:F0} degrees celsius" },
+                    { BarType.CPUMaxTemp, $"Max temperature critical at {currentCpuMaxTemperature:F0} degrees celsius" }
+                };
 
                 if (voiceMessages.TryGetValue(type, out string? message) && speechSynthesizer != null)
                 {
