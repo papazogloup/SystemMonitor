@@ -64,6 +64,19 @@ namespace SystemMonitor
         private DateTime snoozeUntil = DateTime.MinValue;
         private bool isSnoozeActive = false;
 
+        // Add this field to track tooltip changes:
+        private string lastTooltipText = "";
+
+        // Add these fields to track icon changes:
+        private Icon? lastIcon = null;
+        private string lastIconKey = "";
+
+        // Add this field to manage tooltip updates
+        private DateTime lastTooltipUpdate = DateTime.MinValue;
+
+        // Add this field to track recent alerts:
+        private Dictionary<BarType, DateTime> recentAlerts = new();
+
         public SystemTrayApp()
         {
             try 
@@ -270,34 +283,34 @@ namespace SystemMonitor
                     if (isSnoozeActive && DateTime.Now < snoozeUntil)
                     {
                         var remaining = snoozeUntil - DateTime.Now;
-                        var lines = new List<string>
-                        {
-                            $"Snoozed: {remaining.Minutes:D2}:{remaining.Seconds:D2}",
-                            "Click to cancel snooze"
-                        };
+                        var lines = new List<string>();
                         
-                        // Add visible bars info if space allows
-                        foreach (var bar in settings.Bars.Where(b => b.IsVisible).Take(2))
+                        // Add ALL visible bars info FIRST (remove the .Take(3) limitation)
+                        foreach (var bar in settings.Bars.Where(b => b.IsVisible))
                         {
                             switch (bar.Type)
                             {
                                 case BarType.CPU:
-                                    lines.Add($"CPU: {currentCpuUsage:F1}%");
+                                    lines.Add($"CPU: {Math.Round(currentCpuUsage):F0}%");
                                     break;
                                 case BarType.RAM:
-                                    lines.Add($"RAM: {currentRamUsage:F1}%");
+                                    lines.Add($"RAM: {Math.Round(currentRamUsage):F0}%");
                                     break;
                                 case BarType.Network:
-                                    lines.Add($"NET: {(currentNetworkUsage >= 1024 ? $"{currentNetworkUsage / 1024:F1}MB/s" : $"{currentNetworkUsage:F0}KB/s")}");
+                                    lines.Add($"NET: {(currentNetworkUsage >= 1024 ? $"{Math.Round(currentNetworkUsage / 1024):F0}MB/s" : $"{Math.Round(currentNetworkUsage):F0}KB/s")}");
                                     break;
                                 case BarType.CPUTemp:
-                                    lines.Add($"TMP: {currentCpuTemperature:F1}°");
+                                    lines.Add($"TMP: {Math.Round(currentCpuTemperature):F0}°");
                                     break;
                                 case BarType.CPUMaxTemp:
-                                    lines.Add($"MAX: {currentCpuMaxTemperature:F1}°");
+                                    lines.Add($"MAX: {Math.Round(currentCpuMaxTemperature):F0}°");
                                     break;
                             }
                         }
+                        
+                        // Then add snooze info
+                        lines.Add($"⏰ Snoozed: {remaining.Minutes:D2}:{remaining.Seconds:D2}");
+                        lines.Add("🔇 Click to cancel snooze");
                         
                         tooltipText = string.Join("\n", lines);
                     }
@@ -305,36 +318,44 @@ namespace SystemMonitor
                     {
                         var lines = new List<string>();
                         
-                        // Check if there are active alerts
-                        bool hasActiveAlerts = blinkStates.Any(bs => bs.Value);
-                        
-                        if (hasActiveAlerts)
-                        {
-                            lines.Add("ALERT ACTIVE!");
-                            lines.Add("Click to snooze");
-                        }
-                        
-                        // Add visible bars info
+                        // Add visible bars info FIRST
                         foreach (var bar in settings.Bars.Where(b => b.IsVisible))
                         {
                             switch (bar.Type)
                             {
                                 case BarType.CPU:
-                                    lines.Add($"CPU: {currentCpuUsage:F1}%");
+                                    lines.Add($"CPU: {Math.Round(currentCpuUsage):F0}%");
                                     break;
                                 case BarType.RAM:
-                                    lines.Add($"RAM: {currentRamUsage:F1}%");
+                                    lines.Add($"RAM: {Math.Round(currentRamUsage):F0}%");
                                     break;
                                 case BarType.Network:
-                                    lines.Add($"NET: {(currentNetworkUsage >= 1024 ? $"{currentNetworkUsage / 1024:F1}MB/s" : $"{currentNetworkUsage:F0}KB/s")}");
+                                    lines.Add($"NET: {(currentNetworkUsage >= 1024 ? $"{Math.Round(currentNetworkUsage / 1024):F0}MB/s" : $"{Math.Round(currentNetworkUsage):F0}KB/s")}");
                                     break;
                                 case BarType.CPUTemp:
-                                    lines.Add($"TMP: {currentCpuTemperature:F1}°");
+                                    lines.Add($"TMP: {Math.Round(currentCpuTemperature):F0}°");
                                     break;
                                 case BarType.CPUMaxTemp:
-                                    lines.Add($"MAX: {currentCpuMaxTemperature:F1}°");
+                                    lines.Add($"MAX: {Math.Round(currentCpuMaxTemperature):F0}°");
                                     break;
                             }
+                        }
+                        
+                        // Check if there are active alerts OR recent alerts - BUT ONLY IF ALERTS ARE ENABLED
+                        bool hasActiveAlerts = settings.AlertSettings.IsEnabled && (blinkStates.Any(bs => bs.Value) || HasRecentAlerts());
+                        
+                        // THEN add alert messages AFTER the values - ONLY IF ALERTS ARE ENABLED
+                        if (hasActiveAlerts)
+                        {
+                            if (blinkStates.Any(bs => bs.Value))
+                            {
+                                lines.Add("🚨 ALERT ACTIVE!");
+                            }
+                            else
+                            {
+                                lines.Add("⚠️ RECENT ALERT!");
+                            }
+                            lines.Add("👆 Click to snooze");
                         }
                         
                         tooltipText = string.Join("\n", lines);
@@ -346,13 +367,19 @@ namespace SystemMonitor
                         tooltipText = tooltipText.Substring(0, 117) + "...";
                     }
 
-                    try
+                    // Only update tooltip if it actually changed
+                    if (tooltipText != lastTooltipText)
                     {
-                        trayIcon.Text = tooltipText;
-                    }
-                    catch (ArgumentOutOfRangeException)
-                    {
-                        trayIcon.Text = "System Monitor";
+                        try
+                        {
+                            trayIcon.Text = tooltipText;
+                            lastTooltipText = tooltipText;
+                        }
+                        catch (ArgumentOutOfRangeException)
+                        {
+                            trayIcon.Text = "System Monitor";
+                            lastTooltipText = "System Monitor";
+                        }
                     }
                     
                     UpdateTrayIcon();
@@ -364,21 +391,54 @@ namespace SystemMonitor
             }
         }
 
+        // Replace the UpdateTrayIcon method:
         private void UpdateTrayIcon()
         {
             if (trayIcon == null) return;
 
             try
             {
-                using var newIcon = CreateTrayIcon(currentCpuUsage, currentRamUsage, currentNetworkUsage);
-                var oldIcon = trayIcon.Icon;
-                trayIcon.Icon = (Icon)newIcon.Clone();
-                oldIcon?.Dispose();
+                // Create a unique key for the current icon state
+                var visibleBars = settings.Bars.Where(b => b.IsVisible).ToList();
+                
+                // Reduce the frequency of icon updates during blinking by grouping blink states
+                var blinkKey = blinkStates.Any(bs => bs.Value) ? "blinking" : "normal";
+                
+                var iconKey = $"{string.Join(",", visibleBars.Select(b => $"{b.Type}:{Math.Round(GetBarValue(b.Type) / 5) * 5:F0}"))}|{blinkKey}";
+
+                // Only update icon if something actually changed
+                if (iconKey != lastIconKey)
+                {
+                    using var newIcon = CreateTrayIcon(currentCpuUsage, currentRamUsage, currentNetworkUsage);
+                    var oldIcon = trayIcon.Icon;
+                    trayIcon.Icon = (Icon)newIcon.Clone();
+                    oldIcon?.Dispose();
+                    
+                    lastIconKey = iconKey;
+                    lastIcon?.Dispose();
+                    lastIcon = (Icon)newIcon.Clone();
+                    
+                    Debug.WriteLine($"Icon updated: {iconKey}");
+                }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error updating tray icon: {ex.Message}");
             }
+        }
+
+        // Add helper method to get bar values:
+        private float GetBarValue(BarType type)
+        {
+            return type switch
+            {
+                BarType.CPU => currentCpuUsage,
+                BarType.RAM => currentRamUsage,
+                BarType.Network => currentNetworkUsage,
+                BarType.CPUTemp => currentCpuTemperature,
+                BarType.CPUMaxTemp => currentCpuMaxTemperature,
+                _ => 0
+            };
         }
 
         private void UpdateTrayMenu()
@@ -659,6 +719,7 @@ namespace SystemMonitor
         {
             if (disposing)
             {
+                lastIcon?.Dispose();
                 speechSynthesizer?.Dispose();
                 computer?.Close();
                 timer?.Stop();
@@ -756,19 +817,38 @@ namespace SystemMonitor
             return avgTemp;
         }
 
+        // Replace the UpdateSettings method:
         public void UpdateSettings(MonitorSettings newSettings)
         {
+            // Check if alerts were disabled while snooze was active
+            if (isSnoozeActive && !newSettings.AlertSettings.IsEnabled)
+            {
+                // Cancel snooze when alerts are disabled
+                isSnoozeActive = false;
+                snoozeUntil = DateTime.MinValue;
+                
+                Debug.WriteLine("Snooze cancelled because alerts were disabled");
+                
+                if (trayIcon != null)
+                {
+                    trayIcon.ShowBalloonTip(2000, 
+                        "System Monitor", 
+                        "Snooze cancelled - alerts disabled", 
+                        ToolTipIcon.Info);
+                }
+            }
+            
             settings = newSettings;
             UpdateTrayIcon();
         }
 
-        // Add the snooze functionality:
+        // Also update the ActivateSnooze method to better handle disabled alerts:
         private void ActivateSnooze()
         {
             Debug.WriteLine($"ActivateSnooze called. Current snooze state: {isSnoozeActive}");
-            Debug.WriteLine($"Active blink states: {string.Join(", ", blinkStates.Where(bs => bs.Value).Select(bs => bs.Key))}");
+            Debug.WriteLine($"Alerts enabled: {settings.AlertSettings.IsEnabled}");
 
-            // If already snoozed, cancel snooze
+            // If already snoozed, cancel snooze (regardless of alert settings)
             if (isSnoozeActive)
             {
                 isSnoozeActive = false;
@@ -786,18 +866,35 @@ namespace SystemMonitor
                 return;
             }
 
-            // Check if there are any active alerts (blinking states)
-            if (!blinkStates.Any(bs => bs.Value))
+            // If alerts are disabled, don't allow NEW snooze activation
+            if (!settings.AlertSettings.IsEnabled)
             {
-                // No active alerts - show info message
                 if (trayIcon != null)
                 {
                     trayIcon.ShowBalloonTip(2000, 
                         "System Monitor", 
-                        "No active alerts to snooze", 
+                        "Alerts are disabled", 
                         ToolTipIcon.Info);
                 }
-                Debug.WriteLine("No active alerts to snooze");
+                Debug.WriteLine("Alerts are disabled - snooze not available");
+                return;
+            }
+
+            // Check if there are any recent alerts (within last 15 seconds) OR currently blinking
+            bool hasActiveBlinking = blinkStates.Any(bs => bs.Value);
+            bool hasRecentAlerts = HasRecentAlerts();
+            
+            if (!hasActiveBlinking && !hasRecentAlerts)
+            {
+                // No active or recent alerts - show info message
+                if (trayIcon != null)
+                {
+                    trayIcon.ShowBalloonTip(2000, 
+                        "System Monitor", 
+                        "No recent alerts to snooze", 
+                        ToolTipIcon.Info);
+                }
+                Debug.WriteLine("No active or recent alerts to snooze");
                 return;
             }
 
@@ -840,8 +937,12 @@ namespace SystemMonitor
             }
         }
 
+        // Replace the HandleAlert method:
         private void HandleAlert(BarType type)
         {
+            // Record this alert as recent
+            recentAlerts[type] = DateTime.Now;
+            
             // Check if snooze is active
             if (isSnoozeActive)
             {
@@ -872,16 +973,6 @@ namespace SystemMonitor
             {
                 Debug.WriteLine("Playing voice alert...");
                 
-                // Get current values for each type
-                var currentValues = new Dictionary<BarType, float>
-                {
-                    { BarType.CPU, currentCpuUsage },
-                    { BarType.RAM, currentRamUsage },
-                    { BarType.Network, currentNetworkUsage },
-                    { BarType.CPUTemp, currentCpuTemperature },
-                    { BarType.CPUMaxTemp, currentCpuMaxTemperature }
-                };
-
                 // Create voice messages with current values
                 var voiceMessages = new Dictionary<BarType, string>
                 {
@@ -917,8 +1008,14 @@ namespace SystemMonitor
 
             blinkTimer.Tick += (s, e) =>
             {
+                bool previousState = blinkStates[type];
                 blinkStates[type] = !blinkStates[type];
-                UpdateTrayIcon();
+                
+                // Only update icon if blink state actually changed
+                if (previousState != blinkStates[type])
+                {
+                    UpdateTrayIcon();
+                }
 
                 if ((DateTime.Now - startTime).TotalSeconds >= 5)
                 {
@@ -933,6 +1030,26 @@ namespace SystemMonitor
             blinkTimers[type] = blinkTimer;
             blinkTimer.Start();
         }
+
+        // Helper method to check if there are recent alerts (within last 15 seconds):
+        private bool HasRecentAlerts()
+        {
+            var cutoffTime = DateTime.Now.AddSeconds(-15);
+            
+            // Clean up old alerts first
+            var keysToRemove = recentAlerts.Where(kvp => kvp.Value < cutoffTime).Select(kvp => kvp.Key).ToList();
+            foreach (var key in keysToRemove)
+            {
+                recentAlerts.Remove(key);
+            }
+            
+            // Check if any alerts remain (within last 15 seconds)
+            bool hasRecent = recentAlerts.Any(kvp => kvp.Value >= cutoffTime);
+            
+            Debug.WriteLine($"Recent alerts check: {hasRecent}, Active alerts: {string.Join(", ", recentAlerts.Where(kvp => kvp.Value >= cutoffTime).Select(kvp => $"{kvp.Key}@{kvp.Value:HH:mm:ss}"))}");
+            
+            return hasRecent;
+        }
     }
 
     static class Program
@@ -941,13 +1058,13 @@ namespace SystemMonitor
         static void Main()
         {
             Debug.WriteLine("Application starting...");
-            Application.SetHighDpiMode(HighDpiMode.SystemAware); // Για Windows 11
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
             var app = new SystemTrayApp();
             Debug.WriteLine("Running application...");
-            Application.Run(app); // Περνάμε το app ως παράμετρο
+            Application.Run(app);
         }
     }
 }
