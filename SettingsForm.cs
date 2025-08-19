@@ -1,3 +1,6 @@
+// System Monitor v2.0.0 - Settings Form
+// Professional settings interface with smart change detection
+
 using System.Diagnostics;
 
 namespace SystemMonitor

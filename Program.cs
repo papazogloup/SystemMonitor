@@ -1,3 +1,6 @@
+// System Monitor v2.0.0 - Advanced System Monitoring Tool
+// Main application entry point
+
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
