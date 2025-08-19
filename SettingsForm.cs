@@ -399,11 +399,6 @@ namespace SystemMonitor
                 btnApply.Enabled = true;
             };
 
-            dataGridBars.CellValueChanged += (s, e) => {
-                hasChanges = true;
-                btnApply.Enabled = true;
-            };
-
             // Πρόσθεσε το click handler για το color picker:
             dataGridBars.CellClick += (s, e) => {
                 if (dataGridBars == null || e.RowIndex < 0) return;
@@ -440,6 +435,57 @@ namespace SystemMonitor
                 }
             };
 
+            // In InitializeComponent(), add these event handlers after the existing ones:
+
+            // Handle checkbox clicks for Visible column
+            dataGridBars.CellContentClick += (s, e) => {
+                if (e.ColumnIndex == dataGridBars.Columns["Visible"].Index && e.RowIndex >= 0)
+                {
+                    // Force the cell to end edit mode to get the new value
+                    dataGridBars.EndEdit();
+                    
+                    var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex] as DataGridViewCheckBoxCell;
+                    if (cell != null && cell.Value != null)
+                    {
+                        bool isVisible = Convert.ToBoolean(cell.Value);
+                        tempSettings.Bars[e.RowIndex].IsVisible = isVisible;
+                        hasChanges = true;
+                        if (btnApply != null)
+                        {
+                            btnApply.Enabled = true;
+                        }
+                    }
+                }
+            };
+
+            // Handle when checkbox value changes
+            dataGridBars.CellValueChanged += (s, e) => {
+                if (e.ColumnIndex == dataGridBars.Columns["Visible"].Index && e.RowIndex >= 0)
+                {
+                    var cell = dataGridBars.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                    if (cell.Value != null)
+                    {
+                        bool isVisible = Convert.ToBoolean(cell.Value);
+                        tempSettings.Bars[e.RowIndex].IsVisible = isVisible;
+                        hasChanges = true;
+                        if (btnApply != null)
+                        {
+                            btnApply.Enabled = true;
+                        }
+                    }
+                }
+            };
+
+            // Ensure checkbox changes are committed immediately
+            dataGridBars.CurrentCellDirtyStateChanged += (s, e) => {
+                if (dataGridBars.IsCurrentCellDirty && 
+                    dataGridBars.CurrentCell != null &&
+                    dataGridBars.CurrentCell.ColumnIndex == dataGridBars.Columns["Visible"].Index)
+                {
+                    dataGridBars.CommitEdit(DataGridViewDataErrorContexts.Commit);
+                }
+            };
+
             // Add controls to form
             this.Controls.AddRange(new Control[] {
                 chkHorizontal,
@@ -458,30 +504,32 @@ namespace SystemMonitor
         {
             try
             {
-                if (Owner is SystemTrayApp app)
+                settings.IsHorizontalLayout = tempSettings.IsHorizontalLayout;
+                settings.ShowGuideLines = tempSettings.ShowGuideLines;
+                settings.ShowThresholdLines = tempSettings.ShowThresholdLines;
+                settings.ShowPeakLines = tempSettings.ShowPeakLines;
+                settings.Bars = tempSettings.Bars.ToList(); // Copy the list including IsVisible changes
+                settings.AlertSettings = tempSettings.AlertSettings;
+
+                SettingsManager.SaveSettings(settings);
+                
+                // Update the main form with new settings
+                if (Owner is SystemTrayApp mainForm)
                 {
-                    // Αντιγραφή όλων των ρυθμίσεων από το temp στο κανονικό
-                    settings.Bars = tempSettings.Bars.Select(b => b.Clone()).ToList();
-                    settings.IsHorizontalLayout = tempSettings.IsHorizontalLayout;
-                    settings.AlertSettings = tempSettings.AlertSettings.Clone();
-                    settings.ShowGuideLines = tempSettings.ShowGuideLines;
-                    settings.ShowThresholdLines = tempSettings.ShowThresholdLines;
-                    settings.ShowPeakLines = tempSettings.ShowPeakLines;
-
-                    // Εφαρμογή αλλαγών
-                    app.UpdateSettings(settings);
-                    SettingsManager.SaveSettings(settings);
-
-                    hasChanges = false;
-                    btnApply.Enabled = false;
-                    return true;
+                    mainForm.UpdateSettings(settings);
                 }
-                return false;
+
+                hasChanges = false;
+                if (btnApply != null)
+                {
+                    btnApply.Enabled = false;
+                }
+                
+                return true;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error applying settings: {ex.Message}", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error saving settings: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
         }
