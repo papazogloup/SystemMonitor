@@ -9,6 +9,7 @@ using System.Windows.Forms;
 using System.Management; // Προσθήκη για System.Management
 using LibreHardwareMonitor.Hardware;
 using System.Media;  // Add at the
+using System.Speech.Synthesis;
 
 namespace SystemMonitor
 {
@@ -56,12 +57,19 @@ namespace SystemMonitor
 
         private Dictionary<BarType, System.Windows.Forms.Timer> blinkTimers = new();
         private Dictionary<BarType, bool> blinkStates = new();
+        private static readonly Random random = new Random();
+        private SpeechSynthesizer? speechSynthesizer;
 
         public SystemTrayApp()
         {
             try 
             {
-                                // Load settings first
+                // Initialize speech synthesizer
+                speechSynthesizer = new SpeechSynthesizer();
+                speechSynthesizer.Volume = 80;  // 0-100
+                speechSynthesizer.Rate = 0;     // -10 to 10, 0 is normal speed
+
+                // Load settings first
                 settings = SettingsManager.LoadSettings();
                 if (!settings.Bars.Any())
                 {
@@ -587,6 +595,7 @@ namespace SystemMonitor
         {
             if (disposing)
             {
+                speechSynthesizer?.Dispose();
                 computer?.Close();
                 timer?.Stop();
                 timer?.Dispose();
@@ -695,22 +704,38 @@ namespace SystemMonitor
 
             if (settings.AlertSettings.SoundEnabled)
             {
-                Debug.WriteLine("Playing sound...");
+                Debug.WriteLine("Playing voice alert...");
                 
-                // Συχνότητες νοτών (Hz) - C4, D4, E4, F4, G4
-                var frequencies = new Dictionary<BarType, int>
+                // Get current values for each type
+                var currentValues = new Dictionary<BarType, float>
                 {
-                    { BarType.CPU, 262 },        // Do (C4)
-                    { BarType.RAM, 294 },        // Re (D4)  
-                    { BarType.Network, 330 },    // Mi (E4)
-                    { BarType.CPUTemp, 349 },    // Fa (F4)
-                    { BarType.CPUMaxTemp, 392 }  // Sol (G4)
+                    { BarType.CPU, currentCpuUsage },
+                    { BarType.RAM, currentRamUsage },
+                    { BarType.Network, currentNetworkUsage },
+                    { BarType.CPUTemp, currentCpuTemperature },
+                    { BarType.CPUMaxTemp, currentCpuMaxTemperature }
                 };
 
-                if (frequencies.TryGetValue(type, out int frequency))
+                // Create voice messages with current values
+                var voiceMessages = new Dictionary<BarType, string>();
+                
+                if (currentValues.TryGetValue(type, out float currentValue))
                 {
-                    // Παίζουμε τη νότα για 500ms
-                    Console.Beep(frequency, 500);
+                    voiceMessages = new Dictionary<BarType, string>
+                    {
+                        { BarType.CPU, $"CPU usage high at {currentValue:F0} percent" },
+                        { BarType.RAM, $"Memory usage high at {currentValue:F0} percent" },  
+                        { BarType.Network, currentValue >= 1024 ? 
+                            $"Network usage high at {currentValue/1024:F1} megabytes per second" : 
+                            $"Network usage high at {currentValue:F0} kilobytes per second" },
+                        { BarType.CPUTemp, $"CPU temperature high at {currentValue:F0} degrees celsius" },
+                        { BarType.CPUMaxTemp, $"Max temperature critical at {currentValue:F0} degrees celsius" }
+                    };
+                }
+
+                if (voiceMessages.TryGetValue(type, out string? message) && speechSynthesizer != null)
+                {
+                    Task.Run(() => speechSynthesizer.SpeakAsync(message));
                 }
             }
 
