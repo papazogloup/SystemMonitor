@@ -380,38 +380,36 @@ namespace SystemMonitor
         // Add this method to check if current values differ from original settings:
         private bool HasChanges()
         {
+            // Compare tempSettings with the ORIGINAL settings (not current)
+            // We need to track what the settings were when form opened
+            
             // Check alert settings
-            if (chkAlerts.Checked != settings.AlertSettings.IsEnabled ||
-                chkSound.Checked != settings.AlertSettings.SoundEnabled ||
-                (int)numSnooze.Value != settings.AlertSettings.SnoozeMinutes)
+            if (tempSettings.AlertSettings.IsEnabled != settings.AlertSettings.IsEnabled ||
+                tempSettings.AlertSettings.SoundEnabled != settings.AlertSettings.SoundEnabled ||
+                tempSettings.AlertSettings.SnoozeMinutes != settings.AlertSettings.SnoozeMinutes)
             {
                 return true;
             }
 
             // Check bars settings
-            for (int i = 0; i < settings.Bars.Count && i < dataGridBars.Rows.Count; i++)
+            for (int i = 0; i < settings.Bars.Count && i < tempSettings.Bars.Count; i++)
             {
-                var row = dataGridBars.Rows[i];
                 var originalBar = settings.Bars[i];
+                var tempBar = tempSettings.Bars[i];
                 
-                bool isVisible = (bool)(row.Cells["Visible"].Value ?? false);
-                float threshold = Convert.ToSingle(row.Cells["Threshold"].Value ?? 0);
-                // FIX: Get color from Tag, not Value
-                Color color = (Color)(row.Cells["Color"].Tag ?? Color.Blue);
-                
-                if (isVisible != originalBar.IsVisible ||
-                    Math.Abs(threshold - originalBar.Threshold) > 0.1f ||
-                    color != originalBar.Color)
+                if (tempBar.IsVisible != originalBar.IsVisible ||
+                    Math.Abs(tempBar.Threshold - originalBar.Threshold) > 0.1f ||
+                    tempBar.Color != originalBar.Color)
                 {
                     return true;
                 }
             }
 
             // Check layout settings
-            if (chkHorizontal.Checked != settings.IsHorizontalLayout ||
-                chkGuideLines.Checked != settings.ShowGuideLines ||
-                chkPeakLines.Checked != settings.ShowPeakLines ||
-                chkThresholdLines.Checked != settings.ShowThresholdLines)
+            if (tempSettings.IsHorizontalLayout != settings.IsHorizontalLayout ||
+                tempSettings.ShowGuideLines != settings.ShowGuideLines ||
+                tempSettings.ShowPeakLines != settings.ShowPeakLines ||
+                tempSettings.ShowThresholdLines != settings.ShowThresholdLines)
             {
                 return true;
             }
@@ -548,8 +546,9 @@ namespace SystemMonitor
                     mainForm.UpdateSettings(settings);
                 }
 
-                // Update the original settings to match current
-                //originalSettings = currentSettings.Clone();
+                // IMPORTANT: Update tempSettings to match the new applied settings
+                // This ensures HasChanges() works correctly after Apply
+                tempSettings = settings.Clone();
                 
                 hasChanges = false;
                 hasUnsavedChanges = false;
@@ -558,7 +557,6 @@ namespace SystemMonitor
                     btnApply.Enabled = false;
                 }
                 
-                // REMOVED: MessageBox.Show("Settings applied successfully!", "Settings", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return true;
             }
             catch (Exception ex)
