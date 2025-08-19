@@ -706,32 +706,28 @@ namespace SystemMonitor
 
         private void HandleAlert(BarType type)
         {
-            Debug.WriteLine($"HandleAlert called for {type}, Sound enabled: {settings.AlertSettings.SoundEnabled}");
+            Debug.WriteLine($"HandleAlert called for {type}, Alerts enabled: {settings.AlertSettings.IsEnabled}, Sound enabled: {settings.AlertSettings.SoundEnabled}");
 
+            // Check if alerts are enabled at all - if not, return early
+            if (!settings.AlertSettings.IsEnabled)
+            {
+                Debug.WriteLine("Alerts are disabled - skipping alert");
+                return;
+            }
+
+            // Play sound only if both alerts AND sound are enabled
             if (settings.AlertSettings.SoundEnabled)
             {
                 Debug.WriteLine("Playing voice alert...");
                 
-                // Get current values for each type
-                var currentValues = new Dictionary<BarType, float>
-                {
-                    { BarType.CPU, currentCpuUsage },
-                    { BarType.RAM, currentRamUsage },
-                    { BarType.Network, currentNetworkUsage },
-                    { BarType.CPUTemp, currentCpuTemperature },
-                    { BarType.CPUMaxTemp, currentCpuMaxTemperature }
-                };
-
-                // Create voice messages with current values
+                // Voice messages for each type
                 var voiceMessages = new Dictionary<BarType, string>
                 {
-                    { BarType.CPU, $"CPU usage high at {currentCpuUsage:F0} percent" },
-                    { BarType.RAM, $"Memory usage high at {currentRamUsage:F0} percent" },  
-                    { BarType.Network, currentNetworkUsage >= 1024 ? 
-                        $"Network usage high at {currentNetworkUsage/1024:F1} megabytes per second" : 
-                        $"Network usage high at {currentNetworkUsage:F0} kilobytes per second" },
-                    { BarType.CPUTemp, $"CPU temperature high at {currentCpuTemperature:F0} degrees celsius" },
-                    { BarType.CPUMaxTemp, $"Max temperature critical at {currentCpuMaxTemperature:F0} degrees celsius" }
+                    { BarType.CPU, "CPU usage high" },
+                    { BarType.RAM, "Memory usage high" },  
+                    { BarType.Network, "Network usage high" },
+                    { BarType.CPUTemp, "CPU temperature high" },
+                    { BarType.CPUMaxTemp, "Max temperature critical" }
                 };
 
                 if (voiceMessages.TryGetValue(type, out string? message) && speechSynthesizer != null)
@@ -740,6 +736,7 @@ namespace SystemMonitor
                 }
             }
 
+            // Visual blinking - only if alerts are enabled
             if (blinkTimers.ContainsKey(type))
             {
                 blinkTimers[type].Stop();
