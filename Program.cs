@@ -494,11 +494,13 @@ namespace SystemMonitor
                     using var whitePen = new Pen(Color.White, 1);
                     if (settings.IsHorizontalLayout)
                     {
-                        g.DrawRectangle(whitePen, 0, currentPos, barLength, barSize);
+                        // Draw border around the full column height, not just the bar length
+                        g.DrawRectangle(whitePen, 0, currentPos, 16, barSize);
                     }
                     else
                     {
-                        g.DrawRectangle(whitePen, currentPos, 16 - barLength, barSize, barLength);
+                        // Draw border around the full column width, not just the bar length  
+                        g.DrawRectangle(whitePen, currentPos, 0, barSize, 16);
                     }
                 }
 
