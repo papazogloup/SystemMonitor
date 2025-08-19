@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Management; // Προσθήκη για System.Management
 using LibreHardwareMonitor.Hardware;
+using System.Media;  // Add at the
 
 namespace SystemMonitor
 {
@@ -60,7 +61,7 @@ namespace SystemMonitor
         {
             try 
             {
-                // Load settings first
+                                // Load settings first
                 settings = SettingsManager.LoadSettings();
                 if (!settings.Bars.Any())
                 {
@@ -243,6 +244,7 @@ namespace SystemMonitor
                                         message = $"CPU Max Temperature is above {bar.Threshold}°C: {value:F1}°C";
                                         break;
                                 }
+                                Debug.WriteLine($"Triggering alert for {bar.Type}: value={value:F1}, threshold={bar.Threshold:F1}");
                                 alertSystem.TriggerAlert(bar.Type, message);
                             }
                         }
@@ -687,6 +689,29 @@ namespace SystemMonitor
 
         private void HandleAlert(BarType type)
         {
+            Debug.WriteLine($"HandleAlert called for {type}, Sound enabled: {settings.AlertSettings.SoundEnabled}");
+
+            if (settings.AlertSettings.SoundEnabled)
+            {
+                Debug.WriteLine("Playing sound...");
+                
+                // Συχνότητες νοτών (Hz) - C4, D4, E4, F4, G4
+                var frequencies = new Dictionary<BarType, int>
+                {
+                    { BarType.CPU, 262 },        // Do (C4)
+                    { BarType.RAM, 294 },        // Re (D4)  
+                    { BarType.Network, 330 },    // Mi (E4)
+                    { BarType.CPUTemp, 349 },    // Fa (F4)
+                    { BarType.CPUMaxTemp, 392 }  // Sol (G4)
+                };
+
+                if (frequencies.TryGetValue(type, out int frequency))
+                {
+                    // Παίζουμε τη νότα για 500ms
+                    Console.Beep(frequency, 500);
+                }
+            }
+
             if (blinkTimers.ContainsKey(type))
             {
                 blinkTimers[type].Stop();
@@ -695,7 +720,7 @@ namespace SystemMonitor
 
             var blinkTimer = new System.Windows.Forms.Timer
             {
-                Interval = 500 // Blink every 500ms
+                Interval = 500
             };
 
             blinkStates[type] = true;

@@ -382,16 +382,19 @@ namespace SystemMonitor
             };
 
             chkAlerts.CheckedChanged += (s, e) => {
+                tempSettings.AlertSettings.IsEnabled = chkAlerts.Checked;
                 hasChanges = true;
                 btnApply.Enabled = true;
             };
 
             numSnooze.ValueChanged += (s, e) => {
+                tempSettings.AlertSettings.SnoozeMinutes = (int)numSnooze.Value;
                 hasChanges = true;
                 btnApply.Enabled = true;
             };
 
             chkSound.CheckedChanged += (s, e) => {
+                tempSettings.AlertSettings.SoundEnabled = chkSound.Checked;
                 hasChanges = true;
                 btnApply.Enabled = true;
             };
