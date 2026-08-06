@@ -5,13 +5,14 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO.MemoryMappedFiles;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Management; // Προσθήκη για System.Management
+using System.Management;
 using LibreHardwareMonitor.Hardware;
-using System.Media;  // Add at the
+using System.Media;
 using System.Speech.Synthesis;
 
 namespace SystemMonitor
@@ -35,6 +36,37 @@ namespace SystemMonitor
         private MonitorSettings settings = new();
         private float currentCpuTemperature = 0; // Προσθήκη μεταβλητής για θερμοκρασία CPU
         private float currentCpuMaxTemperature = 0; // Προσθήκη στα private fields της κλάσης
+
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        private struct CORE_TEMP_SHARED_DATA
+        {
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
+            public uint[] uiLoad;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 128)]
+            public uint[] uiTjMax;
+            public uint uiCoreCnt;
+            public uint uiCPUCnt;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
+            public float[] fTemp;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)]
+            public float[] fVID;
+            public float fCPUSpeed;
+            public float fFSBSpeed;
+            public float fMultiplier;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 100)]
+            public byte[] sCPUName;
+            public byte ucFahrenheit;
+            public byte ucDeltaToTjMax;
+            public byte ucTdpSupport;
+            public byte ucPowerSupport;
+            public uint uiStructureVersion;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)]
+            public uint[] uiTdp;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)]
+            public float[] fPower;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
+            public float[] fMultipliers;
+        }
 
         // Memory info structure
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
@@ -88,6 +120,9 @@ namespace SystemMonitor
                 speechSynthesizer = new SpeechSynthesizer();
                 speechSynthesizer.Volume = 80;  // 0-100
                 speechSynthesizer.Rate = 0;     // -10 to 10, 0 is normal speed
+
+                // Auto-start Core Temp if not running (needed for temperature readings)
+                EnsureCoreTempRunning();
 
                 // Load settings first
                 settings = SettingsManager.LoadSettings();
@@ -733,11 +768,92 @@ namespace SystemMonitor
             base.Dispose(disposing);
         }
 
+        /// <summary>
+        /// Ensures Core Temp is running. If not found in running processes,
+        /// attempts to locate and launch it silently (minimized to tray).
+        /// Core Temp is required for temperature readings on systems where
+        /// WinRing0 driver access is blocked (e.g. corporate laptops with firmware restrictions).
+        /// </summary>
+        private void EnsureCoreTempRunning()
+        {
+            try
+            {
+                // Already running? (process name has a space: "Core Temp")
+                var coreTempProcs = Process.GetProcesses()
+                    .Where(p => p.ProcessName.Replace(" ", "").Equals("CoreTemp", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                if (coreTempProcs.Length > 0)
+                {
+                    Debug.WriteLine("Core Temp is already running.");
+                    return;
+                }
+
+                // Common installation paths (in priority order)
+                var candidatePaths = new[]
+                {
+                    @"C:\Program Files\Core Temp\Core Temp.exe",
+                    @"C:\Program Files (x86)\Core Temp\Core Temp.exe",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Core Temp", "Core Temp.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Core Temp", "Core Temp.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "CPUID", "CoreTemp", "CoreTemp64.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "CPUID", "CoreTemp", "CoreTemp.exe"),
+                };
+
+                // Also check registry for install path
+                string? regPath = null;
+                try
+                {
+                    using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\CPUID\CoreTemp");
+                    regPath = key?.GetValue("InstallPath") as string;
+                    if (regPath != null)
+                    {
+                        regPath = Path.Combine(regPath, "CoreTemp64.exe");
+                        if (!File.Exists(regPath))
+                            regPath = Path.Combine(Path.GetDirectoryName(regPath)!, "CoreTemp.exe");
+                    }
+                }
+                catch { }
+
+                string? exePath = regPath != null && File.Exists(regPath)
+                    ? regPath
+                    : candidatePaths.FirstOrDefault(File.Exists);
+
+                if (exePath == null)
+                {
+                    Debug.WriteLine("Core Temp not found. Temperature readings may be unavailable.");
+                    return;
+                }
+
+                // Launch minimized (window style = minimized)
+                var psi = new ProcessStartInfo(exePath)
+                {
+                    WindowStyle = ProcessWindowStyle.Minimized,
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+                Debug.WriteLine($"Core Temp launched: {exePath}");
+
+                // Give it a moment to initialize its shared memory
+                System.Threading.Thread.Sleep(1500);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"EnsureCoreTempRunning error: {ex.Message}");
+            }
+        }
+
+
         private float GetCpuTemperature()
         {
             try
             {
-                if (computer?.Hardware == null) return 0;
+                // Try Core Temp shared memory FIRST (works even when WinRing0 driver is blocked)
+                float coreTempResult = GetTemperatureFromCoreTemp();
+                if (coreTempResult > 0)
+                    return coreTempResult;
+
+                // Fall back to LibreHardwareMonitor
+                if (computer?.Hardware == null) return GetTemperatureViaWmi();
 
                 foreach (var hardware in computer.Hardware)
                 {
@@ -751,11 +867,14 @@ namespace SystemMonitor
                         {
                             if (sensor.SensorType == SensorType.Temperature)
                             {
-                                if (sensor.Name.Equals("Core Average", StringComparison.OrdinalIgnoreCase))
+                                if (sensor.Name.Equals("Core Average", StringComparison.OrdinalIgnoreCase) ||
+                                    sensor.Name.Equals("CPU Package", StringComparison.OrdinalIgnoreCase) ||
+                                    sensor.Name.Equals("Core (Tctl/Tdie)", StringComparison.OrdinalIgnoreCase))
                                 {
                                     coreAvg = sensor.Value;
                                 }
-                                else if (sensor.Name.Equals("Core Max", StringComparison.OrdinalIgnoreCase))
+                                else if (sensor.Name.Equals("Core Max", StringComparison.OrdinalIgnoreCase) ||
+                                         sensor.Name.Equals("Core Max Temperature", StringComparison.OrdinalIgnoreCase))
                                 {
                                     coreMax = sensor.Value;
                                     if (coreMax.HasValue)
@@ -776,13 +895,88 @@ namespace SystemMonitor
                 }
 
                 Debug.WriteLine("Core sensors not found, falling back to manual calculation");
-                return GetManualCoreAverage();
+                float manualResult = GetManualCoreAverage();
+                if (manualResult <= 0)
+                {
+                    Debug.WriteLine("LibreHardware returned no data, trying WMI fallback");
+                    return GetTemperatureViaWmi();
+                }
+                return manualResult;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error in GetCpuTemperature: {ex.Message}");
-                return 0;
+                return GetTemperatureViaWmi();
             }
+        }
+
+        /// <summary>
+        /// Reads CPU temperatures from Core Temp's shared memory.
+        /// Core Temp exposes real-time per-core temperatures via a named MemoryMappedFile.
+        /// This works even when hardware driver access (WinRing0) is blocked by Windows 11.
+        /// Core Temp must be running for this to work.
+        /// </summary>
+        private float GetTemperatureFromCoreTemp()
+        {
+            try
+            {
+                using var mmf = MemoryMappedFile.OpenExisting("CoreTempMappingObject");
+                using var accessor = mmf.CreateViewAccessor();
+
+                int structSize = Marshal.SizeOf<CORE_TEMP_SHARED_DATA>();
+                byte[] buffer = new byte[structSize];
+                accessor.ReadArray(0, buffer, 0, Math.Min(structSize, (int)accessor.Capacity));
+
+                GCHandle handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+                try
+                {
+                    var data = Marshal.PtrToStructure<CORE_TEMP_SHARED_DATA>(handle.AddrOfPinnedObject());
+
+                    if (data.uiCoreCnt == 0 || data.fTemp == null) return 0;
+
+                    bool isFahrenheit = data.ucFahrenheit != 0;
+                    float sum = 0;
+                    float max = 0;
+                    int count = 0;
+
+                    for (int i = 0; i < data.uiCoreCnt && i < 256; i++)
+                    {
+                        float temp = data.fTemp[i];
+                        if (isFahrenheit)
+                            temp = (temp - 32f) * 5f / 9f;
+
+                        if (temp > 0 && temp < 120)
+                        {
+                            sum += temp;
+                            max = Math.Max(max, temp);
+                            count++;
+                            Debug.WriteLine($"CoreTemp Core #{i}: {temp:F1}°C");
+                        }
+                    }
+
+                    if (count > 0)
+                    {
+                        currentCpuMaxTemperature = max;
+                        float avg = sum / count;
+                        Debug.WriteLine($"CoreTemp average: {avg:F1}°C (from {count} cores)");
+                        return avg;
+                    }
+                }
+                finally
+                {
+                    handle.Free();
+                }
+            }
+            catch (FileNotFoundException)
+            {
+                Debug.WriteLine("Core Temp not running — shared memory not available");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Core Temp shared memory error: {ex.Message}");
+            }
+
+            return 0;
         }
 
         // Fallback μέθοδος σε περίπτωση που δεν βρούμε το Core Average
@@ -818,6 +1012,55 @@ namespace SystemMonitor
             float avgTemp = count > 0 ? sum / count : 0;
             Debug.WriteLine($"Manually calculated average: {avgTemp:F1}°C");
             return avgTemp;
+        }
+
+        /// <summary>
+        /// Fallback: reads thermal zone temperatures via WMI.
+        /// Used when LibreHardwareMonitor cannot access hardware sensors
+        /// (e.g. after Windows 11 updates that block WinRing0 driver).
+        /// </summary>
+        private float GetTemperatureViaWmi()
+        {
+            try
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    @"root\WMI",
+                    "SELECT * FROM MSAcpi_ThermalZoneTemperature");
+
+                float sumTemp = 0;
+                float maxTemp = 0;
+                int count = 0;
+
+                foreach (System.Management.ManagementObject obj in searcher.Get())
+                {
+                    // WMI returns temperature in tenths of Kelvin
+                    double tenthsKelvin = Convert.ToDouble(obj["CurrentTemperature"]);
+                    float celsius = (float)(tenthsKelvin / 10.0 - 273.15);
+
+                    // Sanity check: valid CPU temperature range
+                    if (celsius > 0 && celsius < 120)
+                    {
+                        sumTemp += celsius;
+                        maxTemp = Math.Max(maxTemp, celsius);
+                        count++;
+                        Debug.WriteLine($"WMI ThermalZone: {celsius:F1}°C");
+                    }
+                }
+
+                if (count > 0)
+                {
+                    currentCpuMaxTemperature = maxTemp;
+                    float avgWmi = sumTemp / count;
+                    Debug.WriteLine($"WMI average temperature: {avgWmi:F1}°C (from {count} zones)");
+                    return avgWmi;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"WMI temperature fallback failed: {ex.Message}");
+            }
+
+            return 0;
         }
 
         // Replace the UpdateSettings method:
@@ -1087,14 +1330,36 @@ namespace SystemMonitor
         [STAThread]
         static void Main()
         {
-            Debug.WriteLine("Application starting...");
-            Application.SetHighDpiMode(HighDpiMode.SystemAware);
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
+            // Catch any unhandled exception and write to crash.log
+            var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
+            
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                File.WriteAllText(logPath, $"[{DateTime.Now}] CRASH:\n{e.ExceptionObject}");
+            };
 
-            var app = new SystemTrayApp();
-            Debug.WriteLine("Running application...");
-            Application.Run(app);
+            Application.ThreadException += (s, e) =>
+            {
+                File.AppendAllText(logPath, $"[{DateTime.Now}] THREAD EXCEPTION:\n{e.Exception}");
+                MessageBox.Show($"Error: {e.Exception.Message}\n\nΔες crash.log για λεπτομέρειες.", "System Monitor Error");
+            };
+
+            try
+            {
+                Debug.WriteLine("Application starting...");
+                Application.SetHighDpiMode(HighDpiMode.SystemAware);
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+
+                var app = new SystemTrayApp();
+                Debug.WriteLine("Running application...");
+                Application.Run(app);
+            }
+            catch (Exception ex)
+            {
+                File.AppendAllText(logPath, $"[{DateTime.Now}] MAIN EXCEPTION:\n{ex}");
+                MessageBox.Show($"Fatal Error: {ex.Message}\n\nΔες crash.log:\n{logPath}", "System Monitor Fatal Error");
+            }
         }
     }
 }
