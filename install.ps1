@@ -39,7 +39,7 @@ Write-Host "  Copied to: $DestExe" -ForegroundColor Green
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 
 if ($existingTask) {
-    Write-Host "  Task Scheduler task '$TaskName' already exists — skipping." -ForegroundColor Yellow
+    Write-Host "  Task Scheduler task '$TaskName' already exists - skipping." -ForegroundColor Yellow
 } else {
     $Action   = New-ScheduledTaskAction -Execute $DestExe -WorkingDirectory $InstallPath
     $Trigger  = New-ScheduledTaskTrigger -AtLogOn -User $Username
@@ -71,4 +71,4 @@ Write-Host ""
 Write-Host "To start now:" -ForegroundColor Yellow
 Write-Host "  Start-ScheduledTask -TaskName '$TaskName'"
 Write-Host "  -- or --"
-Write-Host "  & '$DestExe'"
+Write-Host "  Start-Process '$DestExe'"
