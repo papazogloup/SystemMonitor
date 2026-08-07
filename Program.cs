@@ -36,6 +36,7 @@ namespace SystemMonitor
         private MonitorSettings settings = new();
         private float currentCpuTemperature = 0; // Προσθήκη μεταβλητής για θερμοκρασία CPU
         private float currentCpuMaxTemperature = 0; // Προσθήκη στα private fields της κλάσης
+        private float currentGpuTemperature = 0;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         private struct CORE_TEMP_SHARED_DATA
@@ -141,7 +142,7 @@ namespace SystemMonitor
                 computer = new Computer
                 {
                     IsCpuEnabled = true,
-                    IsGpuEnabled = false,
+                    IsGpuEnabled = true,
                     IsMemoryEnabled = false,
                     IsMotherboardEnabled = false,
                     IsControllerEnabled = false,
@@ -265,6 +266,7 @@ namespace SystemMonitor
 
                 // Update CPU Temperature
                 currentCpuTemperature = GetCpuTemperature();
+                currentGpuTemperature = GetGpuTemperature();
                 
                 // Check thresholds and trigger alerts - ONLY FOR VISIBLE BARS
                 if (alertSystem != null)
@@ -275,7 +277,8 @@ namespace SystemMonitor
                         { BarType.RAM, currentRamUsage },
                         { BarType.Network, currentNetworkUsage },
                         { BarType.CPUTemp, currentCpuTemperature },
-                        { BarType.CPUMaxTemp, currentCpuMaxTemperature }
+                        { BarType.CPUMaxTemp, currentCpuMaxTemperature },
+                        { BarType.GPUTemp, currentGpuTemperature }
                     };
 
                     // Filter to only visible bars
@@ -303,6 +306,9 @@ namespace SystemMonitor
                                         break;
                                     case BarType.CPUMaxTemp:
                                         message = $"CPU Max Temperature is above {bar.Threshold}°C: {value:F1}°C";
+                                        break;
+                                    case BarType.GPUTemp:
+                                        message = $"GPU Temperature is above {bar.Threshold}°C: {value:F1}°C";
                                         break;
                                 }
                                 Debug.WriteLine($"Triggering alert for {bar.Type}: value={value:F1}, threshold={bar.Threshold:F1}");
@@ -343,6 +349,9 @@ namespace SystemMonitor
                                 case BarType.CPUMaxTemp:
                                     lines.Add($"MAX: {Math.Round(currentCpuMaxTemperature):F0}°");
                                     break;
+                                case BarType.GPUTemp:
+                                    lines.Add($"GPU: {Math.Round(currentGpuTemperature):F0}°");
+                                    break;
                             }
                         }
                         
@@ -375,6 +384,9 @@ namespace SystemMonitor
                                     break;
                                 case BarType.CPUMaxTemp:
                                     lines.Add($"MAX: {Math.Round(currentCpuMaxTemperature):F0}°");
+                                    break;
+                                case BarType.GPUTemp:
+                                    lines.Add($"GPU: {Math.Round(currentGpuTemperature):F0}°");
                                     break;
                             }
                         }
@@ -475,6 +487,7 @@ namespace SystemMonitor
                 BarType.Network => currentNetworkUsage,
                 BarType.CPUTemp => currentCpuTemperature,
                 BarType.CPUMaxTemp => currentCpuMaxTemperature,
+                BarType.GPUTemp => currentGpuTemperature,
                 _ => 0
             };
         }
@@ -501,6 +514,15 @@ namespace SystemMonitor
                 {
                     trayMenu.Items[4].Text = $"CPU Max: {currentCpuMaxTemperature:F1}°C";
                 }
+                
+                if (trayMenu.Items.Count == 7) // (6 + 1 added above)
+                {
+                    trayMenu.Items.Insert(5, new ToolStripMenuItem($"GPU Temp: {currentGpuTemperature:F1}°C"));
+                }
+                else if (trayMenu.Items.Count > 5)
+                {
+                    trayMenu.Items[5].Text = $"GPU Temp: {currentGpuTemperature:F1}°C";
+                }
             }
         }
 
@@ -526,7 +548,10 @@ namespace SystemMonitor
 
         private Icon CreateTrayIcon(float cpuUsage, float ramUsage, float networkUsage)
         {
-            using var bitmap = new Bitmap(16, 16);
+            int iconWidth = System.Windows.Forms.SystemInformation.SmallIconSize.Width;
+            int iconHeight = System.Windows.Forms.SystemInformation.SmallIconSize.Height;
+            
+            using var bitmap = new Bitmap(iconWidth, iconHeight);
             using var g = Graphics.FromImage(bitmap);
             
             g.Clear(Color.Black);
@@ -561,6 +586,9 @@ namespace SystemMonitor
                     case BarType.CPUMaxTemp:
                         values[bar.Type] = currentCpuMaxTemperature;
                         break;
+                    case BarType.GPUTemp:
+                        values[bar.Type] = currentGpuTemperature;
+                        break;
                 }
             }
 
@@ -574,9 +602,11 @@ namespace SystemMonitor
             }
 
             int totalBars = visibleBars.Count;
-            int baseWidth = 16 / totalBars;
-            int extraPixels = 16 % totalBars;
-            int currentPos = 0;
+            int barSize = iconWidth / totalBars;
+            int extraPixels = iconWidth % totalBars;
+            
+            // Center the bars by distributing the remaining pixels
+            int currentPos = extraPixels / 2;
 
             using var grayPen = new Pen(Color.FromArgb(64, 64, 64), 1);
             using var peakPen = new Pen(Color.FromArgb(128, 128, 128), 1);
@@ -601,10 +631,9 @@ namespace SystemMonitor
                     Math.Min(threshold / 10240, 1.0f) :
                     Math.Min(threshold / 100.0f, 1.0f);
 
-                int barSize = baseWidth + (i < extraPixels ? 1 : 0);
-                int barLength = Math.Max(1, (int)(16 * scale));
-                int peakLine = Math.Max(1, (int)(16 * peakScale));
-                int thresholdLine = Math.Max(1, (int)(16 * thresholdScale));
+                int barLength = Math.Max(1, (int)(iconHeight * scale));
+                int peakLine = Math.Max(1, (int)(iconHeight * peakScale));
+                int thresholdLine = Math.Max(1, (int)(iconHeight * thresholdScale));
 
                 if (settings.IsHorizontalLayout)
                 {
@@ -612,7 +641,7 @@ namespace SystemMonitor
                     {
                         g.DrawLine(grayPen, 
                             0, currentPos + barSize/2,
-                            16, currentPos + barSize/2);
+                            iconWidth, currentPos + barSize/2);
                     }
 
                     g.FillRectangle(new SolidBrush(bar.Color),
@@ -639,25 +668,25 @@ namespace SystemMonitor
                     {
                         g.DrawLine(grayPen, 
                             currentPos + barSize/2, 0,
-                            currentPos + barSize/2, 16);
+                            currentPos + barSize/2, iconHeight);
                     }
 
                     g.FillRectangle(new SolidBrush(bar.Color),
-                        currentPos, 16 - barLength,
+                        currentPos, iconHeight - barLength,
                         barSize, barLength);
 
                     if (settings.ShowPeakLines)
                     {
                         g.DrawLine(peakPen,
-                            currentPos, 16 - peakLine,
-                            currentPos + barSize, 16 - peakLine);
+                            currentPos, iconHeight - peakLine,
+                            currentPos + barSize, iconHeight - peakLine);
                     }
 
                     if (settings.ShowThresholdLines)
                     {
                         g.DrawLine(thresholdPen,
-                            currentPos, 16 - thresholdLine,
-                            currentPos + barSize, 16 - thresholdLine);
+                            currentPos, iconHeight - thresholdLine,
+                            currentPos + barSize, iconHeight - thresholdLine);
                     }
                 }
 
@@ -666,11 +695,11 @@ namespace SystemMonitor
                     using var whitePen = new Pen(Color.White, 1);
                     if (settings.IsHorizontalLayout)
                     {
-                        g.DrawRectangle(whitePen, 0, currentPos, 15, barSize - 1);
+                        g.DrawRectangle(whitePen, 0, currentPos, iconWidth - 1, barSize - 1);
                     }
                     else
                     {
-                        g.DrawRectangle(whitePen, currentPos, 0, barSize - 1, 15);
+                        g.DrawRectangle(whitePen, currentPos, 0, barSize - 1, iconHeight - 1);
                     }
                 }
 
@@ -908,6 +937,43 @@ namespace SystemMonitor
                 Debug.WriteLine($"Error in GetCpuTemperature: {ex.Message}");
                 return GetTemperatureViaWmi();
             }
+        }
+
+        private float GetGpuTemperature()
+        {
+            try
+            {
+                if (computer?.Hardware == null) return 0;
+
+                foreach (var hardware in computer.Hardware)
+                {
+                    if (hardware.HardwareType == HardwareType.GpuNvidia || 
+                        hardware.HardwareType == HardwareType.GpuAmd ||
+                        hardware.HardwareType == HardwareType.GpuIntel)
+                    {
+                        hardware.Update();
+                        foreach (var sensor in hardware.Sensors)
+                        {
+                            if (sensor.SensorType == SensorType.Temperature)
+                            {
+                                if (sensor.Name.Equals("GPU Core", StringComparison.OrdinalIgnoreCase) ||
+                                    sensor.Name.Equals("GPU", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    if (sensor.Value.HasValue)
+                                    {
+                                        return sensor.Value.Value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in GetGpuTemperature: {ex.Message}");
+            }
+            return 0;
         }
 
         /// <summary>
@@ -1255,7 +1321,8 @@ namespace SystemMonitor
                         $"Network usage high at {currentNetworkUsage/1024:F1} megabytes per second" : 
                         $"Network usage high at {currentNetworkUsage:F0} kilobytes per second" },
                     { BarType.CPUTemp, $"CPU temperature high at {currentCpuTemperature:F0} degrees celsius" },
-                    { BarType.CPUMaxTemp, $"Max temperature critical at {currentCpuMaxTemperature:F0} degrees celsius" }
+                    { BarType.CPUMaxTemp, $"Max temperature critical at {currentCpuMaxTemperature:F0} degrees celsius" },
+                    { BarType.GPUTemp, $"GPU temperature high at {currentGpuTemperature:F0} degrees celsius" }
                 };
 
                 if (voiceMessages.TryGetValue(type, out string? message) && speechSynthesizer != null)

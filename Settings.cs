@@ -14,7 +14,8 @@ public class MonitorSettings
             new BarSettings { Type = BarType.RAM, Color = Color.FromArgb(0, 255, 0), IsVisible = true, Order = 1, Threshold = 90 },
             new BarSettings { Type = BarType.Network, Color = Color.FromArgb(220, 20, 60), IsVisible = true, Order = 2, Threshold = 1000 },
             new BarSettings { Type = BarType.CPUTemp, Color = Color.FromArgb(255, 255, 0), IsVisible = true, Order = 3, Threshold = 80 },
-            new BarSettings { Type = BarType.CPUMaxTemp, Color = Color.FromArgb(255, 140, 0), IsVisible = true, Order = 4, Threshold = 90 }
+            new BarSettings { Type = BarType.CPUMaxTemp, Color = Color.FromArgb(255, 140, 0), IsVisible = true, Order = 4, Threshold = 90 },
+            new BarSettings { Type = BarType.GPUTemp, Color = Color.FromArgb(148, 0, 211), IsVisible = true, Order = 5, Threshold = 85 }
         };
         
         AlertSettings = new AlertSettings 
@@ -41,7 +42,8 @@ public enum BarType
     RAM,
     Network,
     CPUTemp,
-    CPUMaxTemp
+    CPUMaxTemp,
+    GPUTemp
 }
 
 public class AlertSettings

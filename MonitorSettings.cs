@@ -8,7 +8,8 @@ namespace SystemMonitor
         RAM,
         Network,
         CPUTemp,
-        CPUMaxTemp
+        CPUMaxTemp,
+        GPUTemp
     }
 
     public static class BarTypeExtensions 
@@ -19,6 +20,7 @@ namespace SystemMonitor
             {
                 BarType.CPUTemp => "CPU Temperature",
                 BarType.CPUMaxTemp => "CPU Max Temperature",
+                BarType.GPUTemp => "GPU Temperature",
                 _ => type.ToString()
             };
         }
@@ -88,6 +90,12 @@ namespace SystemMonitor
                     Color = Color.FromArgb(255, 255, 140, 0),  // Πορτοκαλί
                     IsVisible = true, 
                     Threshold = 90 
+                },
+                new() {
+                    Type = BarType.GPUTemp,
+                    Color = Color.FromArgb(255, 148, 0, 211),  // Μωβ (DarkViolet)
+                    IsVisible = true,
+                    Threshold = 85
                 }
             };
         }

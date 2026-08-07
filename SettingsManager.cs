@@ -34,8 +34,20 @@ namespace SystemMonitor
             if (File.Exists(SettingsPath))
             {
                 string jsonString = File.ReadAllText(SettingsPath);
-                return JsonSerializer.Deserialize<MonitorSettings>(jsonString, Options) 
-                       ?? new MonitorSettings();
+                var settings = JsonSerializer.Deserialize<MonitorSettings>(jsonString, Options);
+                if (settings != null)
+                {
+                    // Add any missing bars from default settings (e.g. newly added GPUTemp)
+                    var defaults = new MonitorSettings();
+                    foreach (var defaultBar in defaults.Bars)
+                    {
+                        if (!settings.Bars.Any(b => b.Type == defaultBar.Type))
+                        {
+                            settings.Bars.Add(defaultBar.Clone());
+                        }
+                    }
+                    return settings;
+                }
             }
             return new MonitorSettings();
         }
