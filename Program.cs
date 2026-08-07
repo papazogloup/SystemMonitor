@@ -602,11 +602,11 @@ namespace SystemMonitor
             }
 
             int totalBars = visibleBars.Count;
-            int barSize = iconWidth / totalBars;
+            int baseWidth = iconWidth / totalBars;
             int extraPixels = iconWidth % totalBars;
             
-            // Center the bars by distributing the remaining pixels
-            int currentPos = extraPixels / 2;
+            // Start at 0 to completely fill the available space
+            int currentPos = 0;
 
             using var grayPen = new Pen(Color.FromArgb(64, 64, 64), 1);
             using var peakPen = new Pen(Color.FromArgb(128, 128, 128), 1);
@@ -631,6 +631,9 @@ namespace SystemMonitor
                     Math.Min(threshold / 10240, 1.0f) :
                     Math.Min(threshold / 100.0f, 1.0f);
 
+                // Give extra pixels to the last 'extraPixels' bars to fill the space completely
+                int currentBarSize = baseWidth + (i >= totalBars - extraPixels ? 1 : 0);
+
                 int barLength = Math.Max(1, (int)(iconHeight * scale));
                 int peakLine = Math.Max(1, (int)(iconHeight * peakScale));
                 int thresholdLine = Math.Max(1, (int)(iconHeight * thresholdScale));
@@ -640,26 +643,26 @@ namespace SystemMonitor
                     if (settings.ShowGuideLines)
                     {
                         g.DrawLine(grayPen, 
-                            0, currentPos + barSize/2,
-                            iconWidth, currentPos + barSize/2);
+                            0, currentPos + currentBarSize/2,
+                            iconWidth, currentPos + currentBarSize/2);
                     }
 
                     g.FillRectangle(new SolidBrush(bar.Color),
                         0, currentPos,
-                        barLength, barSize);
+                        barLength, currentBarSize);
 
                     if (settings.ShowPeakLines)
                     {
                         g.DrawLine(peakPen,
                             peakLine, currentPos,
-                            peakLine, currentPos + barSize);
+                            peakLine, currentPos + currentBarSize);
                     }
 
                     if (settings.ShowThresholdLines)
                     {
                         g.DrawLine(thresholdPen,
                             thresholdLine, currentPos,
-                            thresholdLine, currentPos + barSize);
+                            thresholdLine, currentPos + currentBarSize);
                     }
                 }
                 else
@@ -667,26 +670,26 @@ namespace SystemMonitor
                     if (settings.ShowGuideLines)
                     {
                         g.DrawLine(grayPen, 
-                            currentPos + barSize/2, 0,
-                            currentPos + barSize/2, iconHeight);
+                            currentPos + currentBarSize/2, 0,
+                            currentPos + currentBarSize/2, iconHeight);
                     }
 
                     g.FillRectangle(new SolidBrush(bar.Color),
                         currentPos, iconHeight - barLength,
-                        barSize, barLength);
+                        currentBarSize, barLength);
 
                     if (settings.ShowPeakLines)
                     {
                         g.DrawLine(peakPen,
                             currentPos, iconHeight - peakLine,
-                            currentPos + barSize, iconHeight - peakLine);
+                            currentPos + currentBarSize, iconHeight - peakLine);
                     }
 
                     if (settings.ShowThresholdLines)
                     {
                         g.DrawLine(thresholdPen,
                             currentPos, iconHeight - thresholdLine,
-                            currentPos + barSize, iconHeight - thresholdLine);
+                            currentPos + currentBarSize, iconHeight - thresholdLine);
                     }
                 }
 
@@ -695,15 +698,15 @@ namespace SystemMonitor
                     using var whitePen = new Pen(Color.White, 1);
                     if (settings.IsHorizontalLayout)
                     {
-                        g.DrawRectangle(whitePen, 0, currentPos, iconWidth - 1, barSize - 1);
+                        g.DrawRectangle(whitePen, 0, currentPos, iconWidth - 1, currentBarSize - 1);
                     }
                     else
                     {
-                        g.DrawRectangle(whitePen, currentPos, 0, barSize - 1, iconHeight - 1);
+                        g.DrawRectangle(whitePen, currentPos, 0, currentBarSize - 1, iconHeight - 1);
                     }
                 }
 
-                currentPos += barSize;
+                currentPos += currentBarSize;
             }
 
             return Icon.FromHandle(bitmap.GetHicon());

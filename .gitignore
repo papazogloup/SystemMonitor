@@ -52,3 +52,4 @@ TestResults/
 *.pdb
 *.opendb
 *.vshost.*
+publish/
