@@ -4,13 +4,14 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>2.2.0-SNAPSHOT</Version>
-    <AssemblyVersion>2.2.0.0</AssemblyVersion>
-    <FileVersion>2.2.0.0</FileVersion>
+    <Version>2.1.1</Version>
+    <AssemblyVersion>2.1.1.0</AssemblyVersion>
+    <FileVersion>2.1.1.0</FileVersion>
     <Company>YourCompany</Company>
     <Product>System Monitor</Product>
     <Description>Advanced system monitoring tool with intelligent alerts, voice notifications, and professional UX</Description>
     <Copyright>Copyright © 2025</Copyright>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <AssemblyName>SystemMonitor</AssemblyName>
     <RootNamespace>SystemMonitor</RootNamespace>
     <Nullable>enable</Nullable>
