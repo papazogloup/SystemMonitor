@@ -137,8 +137,8 @@ namespace SystemMonitor
         {
             // Form settings
             this.Text = "System Monitor Settings";
-            this.ClientSize = new Size(600, 435);
-            this.MinimumSize = new Size(500, 435);
+            this.ClientSize = new Size(600, 425);
+            this.MinimumSize = new Size(500, 425);
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -155,7 +155,7 @@ namespace SystemMonitor
             dataGridBars = new DataGridView
             {
                 Location = new Point(12, 35),
-                Size = new Size(576, 191),  // Height increased to fit all rows
+                Size = new Size(576, 181),  // Height increased exactly by 25px (one row)
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, // Αφαίρεση του Bottom
                 AllowDrop = true,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, // Άλλαξε σε Fill
@@ -227,7 +227,7 @@ namespace SystemMonitor
             var alertPanel = new GroupBox
             {
                 Text = "Alert Settings",
-                Location = new Point(12, 235),
+                Location = new Point(12, 225),
                 Size = new Size(576, 65),
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
@@ -272,7 +272,7 @@ namespace SystemMonitor
             linesPanel = new GroupBox
             {
                 Text = "Display Options",
-                Location = new Point(12, 310),
+                Location = new Point(12, 300),
                 Size = new Size(576, 65),
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
@@ -308,7 +308,7 @@ namespace SystemMonitor
             // Button panel
             var buttonPanel = new Panel
             {
-                Location = new Point(12, 380),
+                Location = new Point(12, 370),
                 Size = new Size(576, 40),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
