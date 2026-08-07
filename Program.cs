@@ -91,6 +91,9 @@ namespace SystemMonitor
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        extern static bool DestroyIcon(IntPtr handle);
+
         private Dictionary<BarType, System.Windows.Forms.Timer> blinkTimers = new();
         private Dictionary<BarType, bool> blinkStates = new();
         private static readonly Random random = new Random();
@@ -462,10 +465,18 @@ namespace SystemMonitor
                     using var newIcon = CreateTrayIcon(currentCpuUsage, currentRamUsage, currentNetworkUsage);
                     var oldIcon = trayIcon.Icon;
                     trayIcon.Icon = (Icon)newIcon.Clone();
-                    oldIcon?.Dispose();
+                    if (oldIcon != null)
+                    {
+                        DestroyIcon(oldIcon.Handle);
+                        oldIcon.Dispose();
+                    }
                     
                     lastIconKey = iconKey;
-                    lastIcon?.Dispose();
+                    if (lastIcon != null)
+                    {
+                        DestroyIcon(lastIcon.Handle);
+                        lastIcon.Dispose();
+                    }
                     lastIcon = (Icon)newIcon.Clone();
                     
                     Debug.WriteLine($"Icon updated: {iconKey}");
@@ -647,9 +658,12 @@ namespace SystemMonitor
                             iconWidth, currentPos + currentBarSize/2);
                     }
 
-                    g.FillRectangle(new SolidBrush(bar.Color),
-                        0, currentPos,
-                        barLength, currentBarSize);
+                    using (var brush = new SolidBrush(bar.Color))
+                    {
+                        g.FillRectangle(brush,
+                            0, currentPos,
+                            barLength, currentBarSize);
+                    }
 
                     if (settings.ShowPeakLines)
                     {
@@ -674,9 +688,12 @@ namespace SystemMonitor
                             currentPos + currentBarSize/2, iconHeight);
                     }
 
-                    g.FillRectangle(new SolidBrush(bar.Color),
-                        currentPos, iconHeight - barLength,
-                        currentBarSize, barLength);
+                    using (var brush = new SolidBrush(bar.Color))
+                    {
+                        g.FillRectangle(brush,
+                            currentPos, iconHeight - barLength,
+                            currentBarSize, barLength);
+                    }
 
                     if (settings.ShowPeakLines)
                     {
